@@ -60,37 +60,96 @@ Traceability tag on each task: spec capability, design decision (`D#`), or resid
 
 ## Review Workload Forecast
 
-Estimated changed lines: 6000-9000
+Re-forecast after PR 1 and PR 2 landed. The previous forecast was written before any code existed and before `strict_tdd` was `true`; it is superseded because it was measurably wrong, not because the plan changed. Task list, ordering and scope are unchanged.
+
+Estimated changed lines: 9000-13000
 400-line budget risk: High
 Chained PRs recommended: Yes
-Decision needed before apply: Yes
+Decision needed before apply: No
 
-Chain strategy: pending — the orchestrator collects it via the Review Workload Guard. Delivery strategy: `ask-on-risk`, and the risk is High, so a strategy decision is required before `sdd-apply` starts.
+Chain strategy: stacked-to-main
 
-This is a greenfield four-project solution plus three test projects. I1 alone is roughly 2800-3500 authored lines; the full I1-I3 scope lands between 6000 and 9000. No honest single PR fits 400 lines.
+Already landed: 2026 changed lines across PRs 1-2 (tasks 1.1-1.6, 1.26). Projected total for the change: **11000-15000**, against the original estimate of 6000-9000 — roughly **1.7x**.
+
+### Why the original forecast was wrong
+
+`strict_tdd` was `false` when it was written and while PR 1 ran. Task 1.26 flipped it to `true`, so from PR 2 onward every task carries a full test suite. PR 2 produced 87 tests for 4 tasks. The original forecast counted implementation lines only and did not count the tests those same tasks mandate.
+
+| PR | Tasks | Estimated | Measured | Factor |
+|----|-------|-----------|---------:|-------:|
+| 1 | 1.1, 1.2, 1.26 | 250-350 | 460 | 1.5x |
+| 2 | 1.3-1.6 | 350-450 | 1566 | 3.9x |
+
+Per-commit evidence (`additions + deletions`, all merged and green):
+
+| Commit | Lines | Scope |
+|--------|------:|-------|
+| `9889641` | 373 | solution, seven projects, `.slnf`, filter assertion (1.1, 1.2) |
+| `9581315` | 87 | `openspec/config.yaml` reconciliation (1.26) |
+| `f4e4505` | 156 | `Result<TValue,TError>` |
+| `3cf53ad` | 342 | `QuantityUnit`, `Quantity`, `PartidaKey`, `Guard` |
+| `22ffcc3` | 372 | the five seam DTOs |
+| `082ece9` | 339 | `ConfigError`, `ConfigLocation`, `ValidationWarning` |
+| `c9b55c7` | 352 | `BoundaryMode`, `Defaults.Mode`, `OpeningsThreshold` |
+| `4fe03eb` | 5 | analyzer warning fix |
+
+### Estimating basis
+
+**≈390 changed lines per `[mac]` task**, derived from PR 2's measured 1566 lines across 4 tasks under `strict_tdd: true`, where test lines equalled or exceeded implementation lines and coherent type-group commits landed at 340-372. **≈130-330 per `[win]` task**, lower because `Metrado.Revit2027` sits outside strict TDD — it carries no xUnit suite and is proved by `SmokeCommand` plus manual RDP verification, so the test multiplier that drove PR 2's 3.9x does not apply. The `[win]` figure is the weaker half of this basis: it is reasoned from scope, not yet measured, and should be recalibrated after PR 15.
+
+Per-task ranges below are the ≈390 basis adjusted for evident scope, and sum bottom-up to ≈10900 — consistent with the 9000-13000 band.
+
+### Budget granularity — read this before slicing
+
+The 400-line budget was honoured **per commit**, not per PR. PR 1 totalled 460 and PR 2 totalled 1566 at PR level; every individual commit stayed under 400. No `size:exception` was recorded, which is only accurate under the per-commit reading.
+
+The table below applies the budget at **PR level**, per the chained-PR hard rule. That is what drives the PR count from 15 to 32. If the team prefers the per-commit reading it has actually been using, the same work collapses to roughly 14 remaining PRs holding ~30 commit-sized units — but that choice should be made explicitly rather than inherited by accident.
 
 ### Proposed PR slicing
 
-One honest slicing pass. Golden `.xlsx` fixtures are excluded from the authored count but remain in snapshot identity.
+Remaining work only (tasks 1.7 onward). PRs 1-2 are shown as measured actuals; PRs 3-32 are forecast. Golden `.xlsx` fixtures are excluded from the authored count but remain in snapshot identity.
 
-| PR | Increment | Tasks | Scope | Est. lines | Focused test command | Runtime harness | Rollback boundary |
-|----|-----------|-------|-------|-----------:|----------------------|-----------------|-------------------|
-| 1 | I1 | 1.1, 1.2, 1.26 | Solution, seven projects, `.slnf` + project-list assertion, `config.yaml` | 250-350 | `dotnet test Metrado.CrossPlatform.slnf` | N/A — no runtime behaviour yet, build config only | Delete `Metrado.slnx`, `Metrado.CrossPlatform.slnf`, `src/`, `tests/`; revert `config.yaml` |
-| 2 | I1 | 1.3-1.6 | Domain seam types, `ConfigError`, `ValidationWarning`, `OpeningsThreshold` | 350-450 | `dotnet test tests/Metrado.Domain.Tests` | N/A — pure value types | Revert `src/Metrado.Domain/` type files + their tests |
-| 3 | I1 | 1.7-1.9 | The openings correction rule, clamp, `UnitMismatch`, `SelectSource` | 350-450 | `dotnet test tests/Metrado.Domain.Tests --filter Metrado` | N/A — pure functions, fully covered by unit tests | Revert `Apply`/`SelectSource` files; PR 2 types survive |
-| 4 | I1 | 1.10-1.13 | Criteria defaults + merge, codification chain, `PartidaKey` grouping, empty set | 450-550 | `dotnet test tests/Metrado.Domain.Tests` | N/A — pure functions | Revert chain + criteria + grouping files; rule from PR 3 survives |
-| 5 | I1 | 1.14, 1.15 | Three-state locator result (N3), `Resolve` ownership pinned (N4) | 250-350 | `dotnet test tests/Metrado.Configuration.Tests` | N/A — no file I/O yet, locator is implemented in PR 8 | Revert `src/Metrado.Configuration/` + design Interfaces amendment |
-| 6 | I1 | 1.16-1.18 | ClosedXML writer, goldens, macOS integration test | 500-600 | `dotnet test tests/Metrado.Excel.Tests` | `dotnet test Metrado.CrossPlatform.slnf` end to end | Revert `src/Metrado.Excel/` + golden fixtures; Domain untouched |
-| 7 | I1 | 1.19, 1.20 | Revit host shell, `.addin` isolation, 8-assembly closure assertion | 300-400 | `dotnet build Metrado.slnx` (Windows) | Launch Revit 2027.2, confirm ribbon button; delete one assembly and confirm the named failure | Delete `Metrado.addin` — the add-in stops loading, nothing else changes |
-| 8 | I1 | 1.21-1.25 | Extraction, read-only proof, locator, export command, `TaskDialog`, smoke | 450-550 | `dotnet build Metrado.slnx` (Windows) | `SmokeCommand` on Revit 2027.2 over RDP: isolated load, Spanish-UI code read, opening enumeration, document unmodified | Revert `ExportTakeoffCommand` + `ExtractionService`; PR 7 shell still loads |
-| 9 | I2 | 2.1, 2.2 | JSON criteria parser, six-category defaults | 400-500 | `dotnet test tests/Metrado.Configuration.Tests` | N/A — parsing is pure; the file path is wired in PR 12 | Revert parser + extended defaults; I1 defaults path survives |
-| 10 | I2 | 2.3 | N1 count-based measurement (`Counted` status, empty-`Sources` branch) | 120-180 | `dotnet test tests/Metrado.Domain.Tests --filter Counted` | N/A — pure function | Revert the `Counted` member and its branch; I1 statuses unchanged |
-| 11 | I2 | 2.4, 2.5 | Keynote + shared-parameter resolvers, per-partida unit | 300-400 | `dotnet test Metrado.CrossPlatform.slnf` | N/A — pure, covered by unit + golden tests | Remove the two resolvers from the chain list; chain still terminates |
-| 12 | I2 | 2.6-2.8 | Six-category extraction, criteria path wiring, smoke automation decision | 350-450 | `dotnet build Metrado.slnx` (Windows) | Export over a six-category model on Revit 2027.2 | Revert extraction extensions; I1 wall path survives |
-| 13 | I3 | 3.1, 3.2, 3.5 | Material-layer extraction, layer metrado, layer rows | 400-500 | `dotnet test Metrado.CrossPlatform.slnf` | Export a three-layer wall model on Revit 2027.2 | Revert layer files; `MaterialRef` stays null = whole element |
-| 14 | I3 | 3.3, 3.4 | Validation pass, advisory warnings | 300-400 | `dotnet test tests/Metrado.Domain.Tests --filter Validation` | N/A — pure pass over extracted data | Revert the validation pass; I1 clamp warning survives |
-| 15 | I3 | 3.6, 3.7 | Saved configurations + picker | 350-450 | `dotnet test tests/Metrado.Configuration.Tests` | Save, reload and re-run on Revit 2027.2 | Revert save/load; single-file criteria path survives |
+Test-command legend: **DOM** `dotnet test tests/Metrado.Domain.Tests` — **CFG** `dotnet test tests/Metrado.Configuration.Tests` — **XLS** `dotnet test tests/Metrado.Excel.Tests` — **ALL** `dotnet test Metrado.CrossPlatform.slnf` — **WIN** `dotnet build Metrado.slnx` on the Windows host.
 
-PRs 4, 6, 8, 9 and 13 land at or slightly above 400. Splitting them further would separate a behaviour from the tests that prove it, which the work-unit rule forbids. Recommend `size:exception` for those five, or accept the modest overage; do not shrink them by deleting tests, comments or goldens.
+| PR | Inc | Tasks | Scope | Est. lines | Test | Runtime harness | Rollback boundary |
+|----|-----|-------|-------|-----------:|------|-----------------|-------------------|
+| 1 | I1 | 1.1, 1.2, 1.26 | Solution, seven projects, `.slnf` + project-list assertion, `config.yaml` | **460 actual** | ALL | N/A — build config only | Landed |
+| 2 | I1 | 1.3-1.6 | Domain seam types, `ConfigError`, `ValidationWarning`, `OpeningsThreshold` | **1566 actual** | DOM | N/A — pure value types | Landed |
+| 3 | I1 | 1.7 | Openings correction `Apply` + all eight I1 measurement scenarios | 420-480 | DOM | N/A — pure function | Revert `Apply`; PR 2 types survive |
+| 4 | I1 | 1.8 | Gross clamp + `UnitMismatch` status | 340-400 | DOM | N/A — pure function | Revert clamp/status; the rule from PR 3 survives |
+| 5 | I1 | 1.9 | `SelectSource`, `NoSource` distinct from measured zero | 240-300 | DOM | N/A — pure function | Revert the selector |
+| 6 | I1 | 1.10 | `CriteriaSet.Default` + per-category per-field `Merge` | 420-480 | DOM | N/A — pure function | Revert criteria files |
+| 7 | I1 | 1.11 | `ICodeResolver` chain, `AssemblyCodeResolver`, `UnclassifiedResolver` | 370-430 | DOM | N/A — pure function | Remove chain files; measurement unaffected |
+| 8 | I1 | 1.12 | `TakeoffResult` grouping, `AppliedCriterion`, `RunReport` | 420-480 | DOM | N/A — pure function | Revert grouping; chain from PR 7 survives |
+| 9 | I1 | 1.13 | Empty measurement set reports "no measurable elements" | 150-210 | DOM | N/A — pure function | Revert the empty-set branch |
+| 10 | I1 | 1.14 | Three-state locator result `Found`/`Absent`/`Unreadable` (N3) | 220-280 | DOM | N/A — result type only; I/O lands in PR 17 | Revert the result type |
+| 11 | I1 | 1.15 | `Resolve` + ownership pinned in design Interfaces (N4) | 270-330 | CFG | N/A — no file I/O yet | Revert `src/Metrado.Configuration/` + the design amendment |
+| 12 | I1 | 1.16 | ClosedXML writer: rows, subtotals, unclassified block, mode, ordering | 500-600 | XLS | N/A — writer output is asserted in PR 13 | Revert `src/Metrado.Excel/`; Domain untouched |
+| 13 | I1 | 1.17 | Golden `.xlsx` fixtures + write-twice byte stability | 260-340 | XLS | N/A — the goldens are the harness | Revert fixtures + their tests |
+| 14 | I1 | 1.18 | macOS end-to-end integration test | 210-280 | ALL | ALL end to end | Revert the integration test only |
+| 15 | I1 | 1.19, 1.20 | Host shell, `.addin` isolation, 8-assembly closure assertion | 340-420 | WIN | Revit 2027.2: ribbon loads; delete one assembly → named failure | Delete `Metrado.addin`; nothing else changes |
+| 16 | I1 | 1.21, 1.22 | `ExtractionService` + read-only guarantee | 350-430 | WIN | Revit 2027.2: 107.639 ft² → 10.0 m², document unmodified | Revert extraction; PR 15 shell still loads |
+| 17 | I1 | 1.23, 1.24 | Locator I/O, `ExportTakeoffCommand`, completion `TaskDialog` | 380-460 | WIN | Revit 2027.2: full export, report readable without opening the workbook | Revert command wiring |
+| 18 | I1 | 1.25 | `SmokeCommand` + recorded answers to the three Open Questions | 300-380 | WIN | Revit 2027.2 smoke run under a Spanish UI | Revert `SmokeCommand` + design notes |
+| 19 | I2 | 2.1 | JSON parser, location mapping, `BoundaryMode` converter | 450-550 | CFG | N/A — parsing is pure; path wired in PR 25 | Revert parser; I1 defaults path survives |
+| 20 | I2 | 2.2 | Six-category defaults with per-category unit, sources, threshold, mode | 400-500 | DOM | N/A — pure function | Revert extended defaults; Walls default survives |
+| 21 | I2 | 2.3 | N1 `Counted` status, empty-`Sources` branch before `SelectSource` | 220-280 | DOM | N/A — pure function | Revert the `Counted` member and its branch |
+| 22 | I2 | 2.4 | Keynote + shared-parameter resolvers at chain positions 2 and 3 | 370-430 | DOM | N/A — pure function | Remove the two links; chain still terminates |
+| 23 | I2 | 2.5 | Per-partida unit, mixed-unit warning, never summed | 270-330 | XLS | N/A — covered by golden fixture | Revert the unit column + golden |
+| 24 | I2 | 2.6 | Six-category extraction, Keynote and shared-parameter reads | 360-440 | WIN | Revit 2027.2: six-category model export | Revert extensions; I1 wall path survives |
+| 25 | I2 | 2.7, 2.8 | Criteria path wiring, blocking `ConfigError` dialog, runner decision | 280-360 | WIN | Revit 2027.2: bad criteria file leaves no partial workbook | Revert wiring; defaults path survives |
+| 26 | I3 | 3.1 | Material-layer extraction with populated `MaterialRef` | 220-280 | WIN | Revit 2027.2: three-layer wall | Revert layer emission; `MaterialRef` stays null |
+| 27 | I3 | 3.2 | Layer metrado + stated reconciliation tolerance + warning | 320-380 | DOM | N/A — pure function | Revert layer metrado |
+| 28 | I3 | 3.3 | Pre-export validation pass, five warning conditions | 450-550 | DOM | N/A — pure pass over extracted data | Revert the pass; I1 clamp warning survives |
+| 29 | I3 | 3.4 | Warnings advisory, full list in `RunReport` | 170-230 | DOM | N/A — pure function | Revert the advisory branch |
+| 30 | I3 | 3.5 | Material-layer Excel rows, one linea per layer | 320-380 | XLS | N/A — covered by golden fixture | Revert layer rows + golden |
+| 31 | I3 | 3.6 | Saved configurations: name, save, reload, reproducible re-run | 500-600 | CFG | N/A — round-trip asserted in tests | Revert save/load; single-file path survives |
+| 32 | I3/I4 | 3.7, 4.1 | Configuration picker + `TaskDialog` name; record the I4 gate | 260-340 | WIN | Revit 2027.2: save, reload, re-run | Revert the picker; 4.1 is documentation only |
 
-For a **feature-branch chain**, PR 1 targets the tracker branch, PR 2 targets PR 1's branch, and each later PR targets its immediate predecessor. For **stacked-to-main**, PRs 1-8 must merge in order because each depends on the previous one's types.
+**30 remaining PRs, 32 total against the original 15** — the PR count roughly doubles because the line total is ~1.7x and the per-PR budget is fixed.
+
+Eight forecast PRs sit above 400: **3, 6, 8, 12, 19, 20, 28, 31**. Four of them admit a second cohesive split and should be split rather than excepted — PR 12 (rows/ordering, then subtotals + unclassified block), PR 19 (parser, then converter + error mapping), PR 28 (warning conditions, then the pass), PR 31 (save, then reload + reproducibility). That raises the remaining count to ~34 and keeps the zero-exception record intact.
+
+The other four — **PR 3, 6, 8, 20** — cannot be split without separating a behaviour from the tests that prove it: the eight openings scenarios are one rule, `Default` and `Merge` are meaningless apart, grouping and `AppliedCriterion` are one result shape, and the six-category defaults are one table. Recommend `size:exception` for those four. Do not shrink any PR by deleting tests, comments or goldens.
+
+**Stacked-to-main** is the cached strategy: each PR merges to main in order. PRs 3-14 must merge in sequence because each depends on the previous one's Domain types; PRs 15-18 depend on PR 14's completed cross-platform pipeline.
