@@ -17,7 +17,7 @@ namespace Metrado.Domain;
 /// normalising rather than a second condition that can drift away from it.
 /// </para>
 /// </remarks>
-public sealed class AssemblyCodeResolver
+public sealed class AssemblyCodeResolver : ICodeResolver
 {
     /// <summary>
     /// The trimmed Assembly Code, or <c>null</c> when the element carries none.
