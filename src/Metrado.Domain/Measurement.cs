@@ -14,6 +14,54 @@ namespace Metrado.Domain;
 public static class Measurement
 {
     /// <summary>
+    /// Reads the criterion's quantity sources in order and selects the first one
+    /// that has a value for this element.
+    /// </summary>
+    /// <remarks>
+    /// The outer loop is the criterion's source list, never the element's
+    /// quantities: priority is a property of the configured criterion, and
+    /// iterating the element instead would let whatever order Revit returned the
+    /// parameters in decide which one is measured.
+    /// <para>
+    /// "Has a value" means the source key is present among the element's
+    /// quantities. A source present and reading <c>0.0</c> has a value and wins —
+    /// falling through to the next source would silently report a genuinely empty
+    /// element as some other parameter's number.
+    /// </para>
+    /// </remarks>
+    /// <returns>
+    /// The quantity the winning source carried, or <see cref="SourceSelection.None"/>
+    /// when no listed source had one. Never a zero standing in for the absence.
+    /// </returns>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="element"/> or <paramref name="criterion"/> is null.
+    /// </exception>
+    public static SourceSelection SelectSource(
+        ElementTakeoff element,
+        CategoryCriterion criterion)
+    {
+        Guard.RequiredValue(element, nameof(element));
+        Guard.RequiredValue(criterion, nameof(criterion));
+
+        foreach (string sourceKey in criterion.Sources)
+        {
+            foreach (RawQuantity quantity in element.Quantities)
+            {
+                // A populated material means this quantity describes one layer, not
+                // the element. Measuring a wall by its insulation is a different
+                // fact wearing a correct-looking number.
+                if (quantity.Material is null
+                    && string.Equals(quantity.SourceKey, sourceKey, StringComparison.Ordinal))
+                {
+                    return SourceSelection.Of(quantity.Amount);
+                }
+            }
+        }
+
+        return SourceSelection.None;
+    }
+
+    /// <summary>
     /// Applies the openings correction, turning a Revit-computed quantity into a
     /// metrado:
     /// <code>
