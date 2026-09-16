@@ -62,6 +62,72 @@ public static class Measurement
     }
 
     /// <summary>
+    /// Measures one element under its category's criterion: reads the criterion's
+    /// quantity sources, then applies the openings correction to whichever one had
+    /// a value.
+    /// </summary>
+    /// <remarks>
+    /// The only composition of <see cref="SelectSource"/> and <see cref="Apply"/>,
+    /// and the reason the correction cannot run on an element that was never
+    /// measured: the selection hands its quantity to a function it invokes only
+    /// when one exists, so the <c>none</c> branch has no <see cref="Quantity"/> to
+    /// pass on even if it wanted to.
+    /// <para>
+    /// A criterion listing no sources at all reports <see cref="MetradoStatus.NoSource"/>
+    /// here. I2's count-based measurement branches on that empty list <em>before</em>
+    /// reaching this method, so a counted category is never reported as a category
+    /// whose sources all came up empty.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="element"/> or <paramref name="criterion"/> is null.
+    /// </exception>
+    public static MetradoOutcome Measure(ElementTakeoff element, CategoryCriterion criterion)
+    {
+        Guard.RequiredValue(element, nameof(element));
+        Guard.RequiredValue(criterion, nameof(criterion));
+
+        return SelectSource(element, criterion).Match(
+            selected: raw => Apply(element, raw, OpeningAmounts(element), criterion.Threshold),
+            none: () => new MetradoOutcome(
+                MetradoStatus.NoSource,
+                Result: null,
+                NoSourceHadAValue(element, criterion)));
+    }
+
+    /// <summary>
+    /// The opening amounts, in the order the element carries them, still one by one.
+    /// </summary>
+    private static IReadOnlyList<Quantity> OpeningAmounts(ElementTakeoff element)
+    {
+        Quantity[] amounts = new Quantity[element.Openings.Count];
+
+        for (int i = 0; i < amounts.Length; i++)
+        {
+            amounts[i] = element.Openings[i].Amount;
+        }
+
+        return amounts;
+    }
+
+    /// <summary>
+    /// Reports an element the criterion could not measure at all.
+    /// </summary>
+    /// <remarks>
+    /// The sources are listed in the message because the user's fix is to populate
+    /// one of them, and naming them is the difference between a warning they can
+    /// act on and a warning they can only acknowledge.
+    /// </remarks>
+    private static ValidationWarning NoSourceHadAValue(
+        ElementTakeoff element,
+        CategoryCriterion criterion) =>
+        ValidationWarning.ForElement(
+            element,
+            $"No quantity source had a value, so this element has no metrado and was "
+                + $"not measured as zero. The {criterion.Category} criterion reads "
+                + $"{string.Join(", ", criterion.Sources)} in that order.");
+
+    /// <summary>
     /// Applies the openings correction, turning a Revit-computed quantity into a
     /// metrado:
     /// <code>

@@ -25,4 +25,17 @@ public enum MetradoStatus
     /// dressed up as a measurement.
     /// </summary>
     UnitMismatch = 2,
+
+    /// <summary>
+    /// No source listed by the category's criterion had a value for this element,
+    /// so nothing was measured. The outcome carries no result.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from a metrado of <c>0.0</c>, which is a measurement that happens
+    /// to be empty. The specification is explicit that such an element "MUST NOT be
+    /// silently assigned zero as if it were measured": the zero would total into
+    /// its partida and read as a wall confirmed to have no area, rather than as a
+    /// wall the export could not measure.
+    /// </remarks>
+    NoSource = 3,
 }
