@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Linq;
 
 namespace Metrado.Domain;
 
@@ -35,16 +37,7 @@ public sealed record CriteriaSet
     {
         Guard.RequiredValue(byCategory, nameof(byCategory));
 
-        // Copied rather than wrapped: a set built from a dictionary the caller still
-        // holds is not a record of what was configured, it is a view of whatever
-        // that caller does next.
-        Dictionary<string, CategoryCriterion> copy = new(StringComparer.Ordinal);
-        foreach (KeyValuePair<string, CategoryCriterion> entry in byCategory)
-        {
-            copy[entry.Key] = entry.Value;
-        }
-
-        ByCategory = new ReadOnlyDictionary<string, CategoryCriterion>(copy);
+        ByCategory = new ReadOnlyDictionary<string, CategoryCriterion>(CopyOrdinal(byCategory));
     }
 
     /// <summary>
@@ -61,6 +54,170 @@ public sealed record CriteriaSet
 
     /// <summary>The criterion for each supported category, keyed by category name.</summary>
     public IReadOnlyDictionary<string, CategoryCriterion> ByCategory { get; }
+
+    /// <summary>
+    /// Applies a configuration file's entries over the built-in criteria: per
+    /// category, then per field.
+    /// </summary>
+    /// <remarks>
+    /// <c>takeoff-configuration</c>, requirement "External, Versionable Criteria
+    /// File": "Values present in the file SHALL override the built-in defaults per
+    /// category; categories absent from the file SHALL keep their defaults." A
+    /// category the overrides never mention is carried through untouched, and a
+    /// category they do mention inherits every field it left null.
+    /// <para>
+    /// Names are validated in full before any field is coalesced, so an entry the
+    /// product does not support can never be written into the set as a new
+    /// category. The user is told which name was not recognised rather than being
+    /// sent to fix a value inside an entry that should not exist.
+    /// </para>
+    /// </remarks>
+    public static Result<CriteriaSet, ConfigError> Merge(
+        CriteriaSet defaults,
+        IReadOnlyList<CategoryOverride> overrides)
+    {
+        Guard.RequiredValue(defaults, nameof(defaults));
+        Guard.RequiredValue(overrides, nameof(overrides));
+
+        ConfigError? badName = FindBadName(defaults, overrides);
+        if (badName is not null)
+        {
+            return Result<CriteriaSet, ConfigError>.Err(badName);
+        }
+
+        Dictionary<string, CategoryCriterion> merged = CopyOrdinal(defaults.ByCategory);
+
+        foreach (CategoryOverride entry in overrides)
+        {
+            Result<CategoryCriterion, ConfigError> coalesced =
+                Coalesce(defaults.ByCategory[entry.Category], entry);
+
+            if (!coalesced.IsOk)
+            {
+                return Result<CriteriaSet, ConfigError>.Err(coalesced.Error);
+            }
+
+            merged[entry.Category] = coalesced.Value;
+        }
+
+        return Result<CriteriaSet, ConfigError>.Ok(new CriteriaSet(merged));
+    }
+
+    /// <summary>
+    /// Returns the first naming fault among the overrides, or null when every entry
+    /// names a supported category exactly once.
+    /// </summary>
+    /// <remarks>
+    /// A repeated category is refused rather than resolved. The entries can
+    /// disagree, and every silent answer is indefensible: last-wins hides the first,
+    /// first-wins hides the last, and coalescing both against the default makes the
+    /// outcome depend on which fields each entry happened to set.
+    /// </remarks>
+    private static ConfigError? FindBadName(
+        CriteriaSet defaults,
+        IReadOnlyList<CategoryOverride> overrides)
+    {
+        HashSet<string> seen = new(StringComparer.Ordinal);
+
+        foreach (CategoryOverride entry in overrides)
+        {
+            if (!defaults.ByCategory.ContainsKey(entry.Category))
+            {
+                string supported = string.Join(
+                    ", ",
+                    defaults.ByCategory.Keys.OrderBy(name => name, StringComparer.Ordinal));
+
+                return Rejected(
+                    $"'{entry.Category}' is not a category this add-in measures. "
+                        + $"Supported categories: {supported}.",
+                    entry.Category,
+                    entry.Category);
+            }
+
+            if (!seen.Add(entry.Category))
+            {
+                return Rejected(
+                    $"Category '{entry.Category}' is configured more than once. "
+                        + "Keep exactly one entry per category.",
+                    entry.Category,
+                    entry.Category);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Copies the criteria into a fresh ordinal-keyed dictionary.
+    /// </summary>
+    /// <remarks>
+    /// Copied rather than wrapped, on both the constructor's path and the merge's:
+    /// a set built over a dictionary its caller still holds is not a record of what
+    /// was configured, it is a view of whatever that caller does next.
+    /// </remarks>
+    private static Dictionary<string, CategoryCriterion> CopyOrdinal(
+        IReadOnlyDictionary<string, CategoryCriterion> source)
+    {
+        Dictionary<string, CategoryCriterion> copy = new(StringComparer.Ordinal);
+
+        foreach (KeyValuePair<string, CategoryCriterion> entry in source)
+        {
+            copy[entry.Key] = entry.Value;
+        }
+
+        return copy;
+    }
+
+    /// <summary>
+    /// Builds one category's effective criterion from its default and the fields
+    /// the file stated.
+    /// </summary>
+    /// <remarks>
+    /// The threshold is rebuilt in the <em>resolved</em> unit, not in the unit it
+    /// was inherited under. <c>takeoff-configuration</c> requires the threshold to
+    /// be "expressed in that category's measurement unit", and
+    /// <c>Measurement.Apply</c> refuses a comparison across unit systems — so a file
+    /// naming only a new unit would otherwise leave every element in the category
+    /// reporting <c>UnitMismatch</c>.
+    /// </remarks>
+    private static Result<CategoryCriterion, ConfigError> Coalesce(
+        CategoryCriterion baseline,
+        CategoryOverride entry)
+    {
+        QuantityUnit unit = entry.Unit ?? baseline.Unit;
+
+        if (!Enum.IsDefined(typeof(QuantityUnit), unit))
+        {
+            return Result<CategoryCriterion, ConfigError>.Err(
+                new ConfigError(
+                    $"'{(int)unit}' is not a measurement unit this add-in supports.")
+                {
+                    Category = entry.Category,
+                    InvalidValue = ((int)unit).ToString(CultureInfo.InvariantCulture),
+                });
+        }
+
+        Result<OpeningsThreshold, ConfigError> threshold = OpeningsThreshold.TryCreate(
+            entry.Threshold ?? baseline.Threshold.Value,
+            unit,
+            entry.Mode ?? baseline.Threshold.Mode,
+            entry.Category);
+
+        if (!threshold.IsOk)
+        {
+            return Result<CategoryCriterion, ConfigError>.Err(threshold.Error);
+        }
+
+        return Result<CategoryCriterion, ConfigError>.Ok(
+            new CategoryCriterion(
+                entry.Category,
+                unit,
+                entry.Sources ?? baseline.Sources,
+                threshold.Value));
+    }
+
+    private static ConfigError Rejected(string message, string category, string invalidValue) =>
+        new ConfigError(message) { Category = category, InvalidValue = invalidValue };
 
     /// <summary>
     /// Builds a threshold that is part of the product rather than of a file.
