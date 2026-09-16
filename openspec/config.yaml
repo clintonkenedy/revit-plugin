@@ -5,33 +5,63 @@ context: |
   Product: Revit add-in extracting budget line items (partidas) with
   quantities (metrado) from a BIM model, exported to Excel as
   capitulos -> partidas -> lineas de medicion.
-  Stack: C#/.NET (target Revit version not yet decided).
-  Dev host: macOS ARM64, no local dotnet/Revit; build/run/debug happens
-  on a remote Windows host over RDP.
-  Repository: currently empty (no source, no build file, no CI).
+  Stack: C#/.NET 10, targeting Revit 2027 only (net10.0-windows).
+  Solution: Metrado.slnx (seven projects). Metrado.CrossPlatform.slnf
+  filters out the Windows-only Metrado.Revit2027 so the Domain,
+  Configuration and Excel loop builds and tests on macOS.
+  Dev host: macOS ARM64 with .NET SDK 10.0.400 — runs the cross-platform
+  loop locally. Revit build/run/debug happens on a remote Windows host
+  over RDP; tasks needing it are tagged [win].
 
-strict_tdd: false
+strict_tdd: true
 strict_tdd_reason: >
-  Zero projects discovered in the workspace (repository is empty).
-  No workspace-level test command exists. Per the no-runner fallback,
-  Strict TDD Mode defaults to false. Additionally this macOS ARM64
-  host cannot run dotnet or Revit locally, so no test command can be
-  verified from here even once code exists; re-evaluate once the
-  remote Windows build/test loop is defined during design.
+  Three xUnit test projects now exist (Domain, Configuration, Excel) and
+  the workspace test command `dotnet test Metrado.CrossPlatform.slnf`
+  runs green on this macOS ARM64 host, so the no-runner fallback no
+  longer applies. Scope: the cross-platform projects, where the rules
+  live. Metrado.Revit2027 stays outside strict TDD because the Revit API
+  cannot be mocked (sealed types, non-constructible Document) and no
+  in-process runner is confirmed for Revit 2027 / .NET 10; that layer is
+  covered by SmokeCommand on the Windows host.
 
-projects: []
-# No projects discovered yet. Once the Revit add-in project(s) are
-# scaffolded (likely on the remote Windows host), add entries here:
-#   - path: "src/RevitPlugin"
-#     stack: "C#/.NET"
-#     test_command: ""
-#     framework: ""
+projects:
+  - path: "src/Metrado.Domain"
+    stack: "C#/.NET (netstandard2.0;net10.0)"
+    test_command: "dotnet test tests/Metrado.Domain.Tests"
+    framework: "xUnit"
+  - path: "src/Metrado.Configuration"
+    stack: "C#/.NET 10"
+    test_command: "dotnet test tests/Metrado.Configuration.Tests"
+    framework: "xUnit"
+  - path: "src/Metrado.Excel"
+    stack: "C#/.NET 10 (ClosedXML)"
+    test_command: "dotnet test tests/Metrado.Excel.Tests"
+    framework: "xUnit"
+  - path: "src/Metrado.Revit2027"
+    stack: "C#/.NET 10 Windows (Nice3point.Revit.Api.* 2027.2.0)"
+    test_command: ""
+    framework: "SmokeCommand in the Revit host — Windows only, no dotnet test"
+  - path: "tests/Metrado.Domain.Tests"
+    stack: "C#/.NET 10"
+    test_command: "dotnet test tests/Metrado.Domain.Tests"
+    framework: "xUnit"
+  - path: "tests/Metrado.Configuration.Tests"
+    stack: "C#/.NET 10"
+    test_command: "dotnet test tests/Metrado.Configuration.Tests"
+    framework: "xUnit"
+  - path: "tests/Metrado.Excel.Tests"
+    stack: "C#/.NET 10"
+    test_command: "dotnet test tests/Metrado.Excel.Tests"
+    framework: "xUnit"
 
 open_questions:
-  - Target Revit version(s) to support (drives .NET 8 vs .NET Framework 4.8)
-  - Test framework for the Windows host (xUnit/NUnit are likely candidates)
-  - Excel export library (e.g. ClosedXML, EPPlus, OpenXML SDK)
-  - Revit API access pattern for extracting quantities/metrado data
+  # Settled during design: Revit version (2027 only), Excel library
+  # (ClosedXML), test framework (xUnit), and the Revit API access pattern
+  # (BuiltInParameter reads plus UnitUtils conversion behind the adapter).
+  # The three that remain are host-only and answered by task 1.25.
+  - Does *Area and Volume Computations* gate the quantity parameters the Walls criterion reads
+  - '.addin install path and ContextName collision behaviour on Revit 2027'
+  - Does an in-process NUnit runner exist for Revit 2027 / .NET 10
 
 rules:
   proposal:
@@ -52,12 +82,13 @@ rules:
   apply:
     guidelines:
       - Follow existing code patterns once established
-      - Do not assume a local dotnet/Revit toolchain is available on this host
-    tdd: false
-    test_command: ""
+      - Keep Metrado.Domain free of third-party package references
+      - Do not add Metrado.Revit2027 to the cross-platform filter; it cannot build on macOS
+    tdd: true
+    test_command: "dotnet test Metrado.CrossPlatform.slnf"
   verify:
-    test_command: ""
-    build_command: ""
+    test_command: "dotnet test Metrado.CrossPlatform.slnf"
+    build_command: "dotnet build Metrado.CrossPlatform.slnf"
     coverage_threshold: 0
   archive:
     - Warn before merging destructive deltas
