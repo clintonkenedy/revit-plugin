@@ -1,0 +1,13 @@
+{
+  "solution": {
+    "path": "Metrado.slnx",
+    "projects": [
+      "src\\Metrado.Domain\\Metrado.Domain.csproj",
+      "src\\Metrado.Configuration\\Metrado.Configuration.csproj",
+      "src\\Metrado.Excel\\Metrado.Excel.csproj",
+      "tests\\Metrado.Domain.Tests\\Metrado.Domain.Tests.csproj",
+      "tests\\Metrado.Configuration.Tests\\Metrado.Configuration.Tests.csproj",
+      "tests\\Metrado.Excel.Tests\\Metrado.Excel.Tests.csproj"
+    ]
+  }
+}

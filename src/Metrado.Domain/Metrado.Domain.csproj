@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Decision D1: multi-targeted on purpose. The netstandard2.0 leg keeps a
+    future Revit 2026 (.NET 8) adapter cheap; it costs one TargetFrameworks
+    line plus the IsExternalInit polyfill. This project MUST stay free of
+    third-party package references (see D1 and D5): the JSON parser lives in
+    Metrado.Configuration precisely so Domain keeps a zero-package closure.
+  -->
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,30 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Decision D3: the only Windows-bound project and the only one referencing
+    the Revit API. It does NOT build on macOS by design, which is why
+    Metrado.CrossPlatform.slnf excludes it.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!--
+    Reference assemblies only: Revit loads its own API binaries into the host
+    process, so copying ours next to the add-in would risk a version clash.
+    ExcludeAssets="runtime" is the PackageReference form of Private=false.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPI" Version="2027.2.0" ExcludeAssets="runtime" />
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="2027.2.0" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Metrado.Configuration\Metrado.Configuration.csproj" />
+    <ProjectReference Include="..\Metrado.Domain\Metrado.Domain.csproj" />
+    <ProjectReference Include="..\Metrado.Excel\Metrado.Excel.csproj" />
+  </ItemGroup>
+
+</Project>

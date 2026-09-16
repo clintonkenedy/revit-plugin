@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Decision D5: criteria parsing lives here, not in Domain, because
+    System.Text.Json is in-box on net10.0 and would be a five-package
+    dependency on netstandard2.0.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Metrado.Domain\Metrado.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

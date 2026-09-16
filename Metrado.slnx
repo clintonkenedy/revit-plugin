@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Metrado.Configuration/Metrado.Configuration.csproj" />
+    <Project Path="src/Metrado.Domain/Metrado.Domain.csproj" />
+    <Project Path="src/Metrado.Excel/Metrado.Excel.csproj" />
+    <Project Path="src/Metrado.Revit2027/Metrado.Revit2027.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Metrado.Configuration.Tests/Metrado.Configuration.Tests.csproj" />
+    <Project Path="tests/Metrado.Domain.Tests/Metrado.Domain.Tests.csproj" />
+    <Project Path="tests/Metrado.Excel.Tests/Metrado.Excel.Tests.csproj" />
+  </Folder>
+</Solution>
