@@ -13,6 +13,13 @@ namespace Metrado.Domain;
 /// never substituted for the metrado downstream — they are different numbers with
 /// different meanings, and conflating them is how a wrong budget ships.
 /// </param>
+/// <param name="Gross">
+/// What the element would measure with no opening deducted at all, defined by
+/// <c>metrado-measurement</c> as <c>rawQuantity + Σ q(o)</c> over <em>every</em>
+/// opening. It is the ceiling on the correction: adding openings back can reach
+/// it but never pass it, because there is no more material to restore than Revit
+/// removed.
+/// </param>
 /// <param name="AppliedMode">
 /// The boundary convention actually applied. Recorded rather than assumed: the
 /// mode is configurable, so a result that does not name its own convention leaves
@@ -23,13 +30,18 @@ namespace Metrado.Domain;
 /// other half of the convention — the same mode at a different threshold is a
 /// different budget.
 /// </param>
-/// <remarks>
-/// Task 1.8 adds the gross quantity and the <c>ClampedToGross</c> flag to this
-/// record, and wraps it in a <c>MetradoOutcome</c> carrying the measurement
-/// status. Neither is modelled here because neither has a behaviour yet.
-/// </remarks>
+/// <param name="ClampedToGross">
+/// Whether the gross bound had to be enforced on this element. True means the
+/// extraction input was inconsistent with its own gross quantity, so
+/// <paramref name="Metrado"/> is a bound rather than the number the correction
+/// produced. It always travels with a validation warning naming the element:
+/// carrying the flag alone would let a reviewer read a bounded figure as a
+/// measured one.
+/// </param>
 public sealed record MetradoResult(
     Quantity Metrado,
     Quantity Raw,
+    Quantity Gross,
     BoundaryMode AppliedMode,
-    double AppliedThreshold);
+    double AppliedThreshold,
+    bool ClampedToGross);

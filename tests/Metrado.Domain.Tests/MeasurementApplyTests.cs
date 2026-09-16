@@ -1,3 +1,5 @@
+using static Metrado.Domain.Tests.MeasurementFixture;
+
 namespace Metrado.Domain.Tests;
 
 /// <summary>
@@ -8,19 +10,28 @@ namespace Metrado.Domain.Tests;
 /// </summary>
 public sealed class MeasurementApplyTests
 {
-    private static OpeningsThreshold Threshold(
-        double value,
-        BoundaryMode mode = BoundaryMode.Exclusive,
-        QuantityUnit unit = QuantityUnit.SquareMetre)
+
+    /// <summary>
+    /// Applies the rule and unwraps a successful measurement.
+    /// </summary>
+    /// <remarks>
+    /// Every scenario below describes an element the rule can measure, so the
+    /// unwrap asserts that: a scenario that silently started returning a refusal
+    /// would fail here rather than quietly skipping its own assertions on a
+    /// nullable result.
+    /// </remarks>
+    private static MetradoResult Measured(
+        Quantity raw,
+        IReadOnlyList<Quantity> openings,
+        OpeningsThreshold threshold)
     {
-        Result<OpeningsThreshold, ConfigError> result =
-            OpeningsThreshold.TryCreate(value, unit, mode, "Walls");
+        MetradoOutcome outcome = Measurement.Apply(
+            Wall(), raw, openings, threshold);
 
-        Assert.True(result.IsOk, $"Test setup built an invalid threshold: {result}");
-        return result.Value;
+        Assert.Equal(MetradoStatus.Measured, outcome.Status);
+        Assert.NotNull(outcome.Result);
+        return outcome.Result;
     }
-
-    private static Quantity SquareMetres(double value) => new(value, QuantityUnit.SquareMetre);
 
     /// <summary>
     /// <c>metrado-measurement</c>, scenario "Sub-threshold opening is added back".
@@ -34,7 +45,7 @@ public sealed class MeasurementApplyTests
     [Fact]
     public void ASubThresholdOpeningIsAddedBackIntoTheMetrado()
     {
-        MetradoResult result = Measurement.Apply(
+        MetradoResult result = Measured(
             SquareMetres(18.0),
             [SquareMetres(0.6)],
             Threshold(1.0));
@@ -50,7 +61,7 @@ public sealed class MeasurementApplyTests
     [Fact]
     public void AnOpeningExactlyAtTheThresholdStaysDeductedUnderExclusiveMode()
     {
-        MetradoResult result = Measurement.Apply(
+        MetradoResult result = Measured(
             SquareMetres(18.0),
             [SquareMetres(1.0)],
             Threshold(1.0, BoundaryMode.Exclusive));
@@ -66,7 +77,7 @@ public sealed class MeasurementApplyTests
     [Fact]
     public void AnOpeningExactlyAtTheThresholdIsAddedBackUnderInclusiveMode()
     {
-        MetradoResult result = Measurement.Apply(
+        MetradoResult result = Measured(
             SquareMetres(18.0),
             [SquareMetres(1.0)],
             Threshold(1.0, BoundaryMode.Inclusive));
@@ -85,9 +96,9 @@ public sealed class MeasurementApplyTests
         Quantity raw = SquareMetres(15.0);
         Quantity[] openings = [SquareMetres(0.4), SquareMetres(1.0), SquareMetres(2.5)];
 
-        double exclusive = Measurement.Apply(
+        double exclusive = Measured(
             raw, openings, Threshold(1.0, BoundaryMode.Exclusive)).Metrado.Value;
-        double inclusive = Measurement.Apply(
+        double inclusive = Measured(
             raw, openings, Threshold(1.0, BoundaryMode.Inclusive)).Metrado.Value;
 
         // Exclusive adds back only the 0.4; inclusive also adds back the 1.0.
@@ -107,7 +118,7 @@ public sealed class MeasurementApplyTests
     [Fact]
     public void AnAboveThresholdOpeningStaysDeducted()
     {
-        MetradoResult result = Measurement.Apply(
+        MetradoResult result = Measured(
             SquareMetres(16.0),
             [SquareMetres(2.1)],
             Threshold(1.0));
@@ -122,7 +133,7 @@ public sealed class MeasurementApplyTests
     [Fact]
     public void MixedOpeningsAddBackOnlyThoseBelowTheThreshold()
     {
-        MetradoResult result = Measurement.Apply(
+        MetradoResult result = Measured(
             SquareMetres(15.0),
             [SquareMetres(0.4), SquareMetres(0.9), SquareMetres(2.5)],
             Threshold(1.0));
@@ -137,7 +148,7 @@ public sealed class MeasurementApplyTests
     [Fact]
     public void AnElementWithNoOpeningsMeasuresItsRawQuantity()
     {
-        MetradoResult result = Measurement.Apply(
+        MetradoResult result = Measured(
             SquareMetres(20.0),
             [],
             Threshold(1.0));
@@ -156,7 +167,7 @@ public sealed class MeasurementApplyTests
     [InlineData(BoundaryMode.Inclusive)]
     public void AZeroThresholdDisablesTheCorrectionEntirely(BoundaryMode mode)
     {
-        MetradoResult result = Measurement.Apply(
+        MetradoResult result = Measured(
             SquareMetres(12.0),
             [SquareMetres(0.0), SquareMetres(0.5), SquareMetres(3.0)],
             Threshold(0.0, mode));
@@ -177,7 +188,7 @@ public sealed class MeasurementApplyTests
     [Fact]
     public void OpeningsAreEvaluatedIndividuallyAndNeverSummedAgainstTheThreshold()
     {
-        MetradoResult result = Measurement.Apply(
+        MetradoResult result = Measured(
             SquareMetres(10.0),
             [SquareMetres(0.6), SquareMetres(0.7), SquareMetres(0.8)],
             Threshold(1.0));
@@ -195,7 +206,7 @@ public sealed class MeasurementApplyTests
     [Fact]
     public void EveryOpeningIsTestedNotJustTheFirstOrTheSmallest()
     {
-        MetradoResult result = Measurement.Apply(
+        MetradoResult result = Measured(
             SquareMetres(30.0),
             [SquareMetres(0.5), SquareMetres(4.0), SquareMetres(0.25)],
             Threshold(1.0));
@@ -215,7 +226,7 @@ public sealed class MeasurementApplyTests
     [InlineData(BoundaryMode.Inclusive)]
     public void TheResultRecordsTheBoundaryModeThatProducedIt(BoundaryMode mode)
     {
-        MetradoResult result = Measurement.Apply(
+        MetradoResult result = Measured(
             SquareMetres(18.0),
             [SquareMetres(1.0)],
             Threshold(1.0, mode));
@@ -230,7 +241,7 @@ public sealed class MeasurementApplyTests
     [Fact]
     public void TheResultRecordsTheThresholdThatProducedIt()
     {
-        MetradoResult result = Measurement.Apply(
+        MetradoResult result = Measured(
             SquareMetres(18.0),
             [SquareMetres(0.6)],
             Threshold(1.25));
@@ -246,7 +257,7 @@ public sealed class MeasurementApplyTests
     [Fact]
     public void TheResultCarriesTheRawQuantitySeparatelyFromTheMetrado()
     {
-        MetradoResult result = Measurement.Apply(
+        MetradoResult result = Measured(
             SquareMetres(18.0),
             [SquareMetres(0.6)],
             Threshold(1.0));
@@ -264,7 +275,7 @@ public sealed class MeasurementApplyTests
     [Fact]
     public void TheMetradoIsExpressedInTheRawQuantitysUnit()
     {
-        MetradoResult result = Measurement.Apply(
+        MetradoResult result = Measured(
             new Quantity(8.0, QuantityUnit.CubicMetre),
             [new Quantity(0.3, QuantityUnit.CubicMetre)],
             Threshold(1.0, unit: QuantityUnit.CubicMetre));
@@ -292,6 +303,7 @@ public sealed class MeasurementApplyTests
     {
         ArgumentOutOfRangeException error = Assert.Throws<ArgumentOutOfRangeException>(
             () => Measurement.Apply(
+                Wall(),
                 SquareMetres(18.0),
                 [SquareMetres(0.6)],
                 default));
@@ -309,7 +321,7 @@ public sealed class MeasurementApplyTests
     public void AnUndeclaredBoundaryModeIsRefusedEvenWhenThereAreNoOpeningsToTest()
     {
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => Measurement.Apply(SquareMetres(18.0), [], default));
+            () => Measurement.Apply(Wall(), SquareMetres(18.0), [], default));
     }
 
     /// <summary>
@@ -317,10 +329,29 @@ public sealed class MeasurementApplyTests
     /// null here is a broken extractor. Refusing names it instead of letting a
     /// <c>NullReferenceException</c> surface from inside the rule.
     /// </summary>
+    /// <summary>
+    /// The element is what every warning this rule raises has to name, so a null
+    /// one is refused up front rather than at the moment a warning needs it.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately a measurable element: with a fault present the warning
+    /// builders would dereference the element and the null would surface anyway.
+    /// It is the clean measurement that leaves it untouched, which is how a null
+    /// element reaches the workbook attached to a line nobody can attribute.
+    /// </remarks>
+    [Fact]
+    public void ANullElementIsRefusedEvenWhenThereIsNothingToWarnAbout()
+    {
+        Assert.Throws<ArgumentException>(
+            () => Measurement.Apply(
+                null!, SquareMetres(18.0), [SquareMetres(0.6)], Threshold(1.0)));
+    }
+
     [Fact]
     public void ANullOpeningsListIsRefused()
     {
         Assert.Throws<ArgumentException>(
-            () => Measurement.Apply(SquareMetres(18.0), null!, Threshold(1.0)));
+            () => Measurement.Apply(
+                Wall(), SquareMetres(18.0), null!, Threshold(1.0)));
     }
 }
