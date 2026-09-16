@@ -42,4 +42,6 @@ internal static class MeasurementFixture
     }
 
     internal static Quantity SquareMetres(double value) => new(value, QuantityUnit.SquareMetre);
+
+    internal static Quantity CubicMetres(double value) => new(value, QuantityUnit.CubicMetre);
 }

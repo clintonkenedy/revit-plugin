@@ -17,4 +17,12 @@ public enum MetradoStatus
 {
     /// <summary>The rule produced a metrado. The outcome carries a result.</summary>
     Measured = 1,
+
+    /// <summary>
+    /// A quantity did not share the threshold's unit, so the comparison was
+    /// refused and no metrado exists. Domain does not convert — the Revit-facing
+    /// layer owns conversion, so reconciling the units here would be a guess
+    /// dressed up as a measurement.
+    /// </summary>
+    UnitMismatch = 2,
 }

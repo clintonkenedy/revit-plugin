@@ -50,14 +50,6 @@ public static class Measurement
     /// <paramref name="threshold"/> carries a boundary mode that is not a declared
     /// member.
     /// </exception>
-    /// <remarks>
-    /// Unit agreement between <paramref name="raw"/>, <paramref name="openings"/>
-    /// and <paramref name="threshold"/> is still a precondition here rather than
-    /// an enforced one; refusing a mismatched comparison is
-    /// <c>MetradoStatus.UnitMismatch</c>, which lands next. Nothing calls this
-    /// method yet — source selection, grouping and extraction all come later — so
-    /// no mismatched quantity can reach it before that check exists.
-    /// </remarks>
     public static MetradoOutcome Apply(
         ElementTakeoff element,
         Quantity raw,
@@ -71,6 +63,18 @@ public static class Measurement
         // openings would otherwise skip the check entirely and return a result
         // stamped with a convention the product cannot name.
         RequireDeclaredMode(threshold);
+
+        // Before any arithmetic. The comparison against the threshold is exactly
+        // what has to be refused, so discovering the mismatch after running it
+        // would mean reporting a number the rule had already decided it could not
+        // compute.
+        if (MismatchedUnit(raw, openings, threshold) is QuantityUnit foreign)
+        {
+            return new MetradoOutcome(
+                MetradoStatus.UnitMismatch,
+                Result: null,
+                UnitsDisagree(element, foreign, threshold));
+        }
 
         double addedBack = 0;
         double allOpenings = 0;
@@ -109,6 +113,65 @@ public static class Measurement
             result,
             boundHolds ? null : GrossBoundViolated(element, result, allOpenings));
     }
+
+    /// <summary>
+    /// The first unit that does not match the threshold's, or <c>null</c> when
+    /// every quantity agrees with it.
+    /// </summary>
+    /// <remarks>
+    /// The raw quantity is checked first because it is the one the metrado is
+    /// built from, and the openings are checked individually for the same reason
+    /// the correction evaluates them individually: one opening read in the wrong
+    /// unit is enough to corrupt the total, and a whole-list check would have to
+    /// decide which unit the list "really" is.
+    /// </remarks>
+    private static QuantityUnit? MismatchedUnit(
+        Quantity raw,
+        IReadOnlyList<Quantity> openings,
+        OpeningsThreshold threshold)
+    {
+        if (raw.Unit != threshold.Unit)
+        {
+            return raw.Unit;
+        }
+
+        foreach (Quantity opening in openings)
+        {
+            if (opening.Unit != threshold.Unit)
+            {
+                return opening.Unit;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Reports a quantity that cannot be compared against the threshold.
+    /// </summary>
+    /// <remarks>
+    /// This is an adapter fault, not a modelling mistake, so the message names
+    /// both units rather than asking the user to change the model. Every quantity
+    /// crossing the Revit seam declares its unit precisely so this is detectable
+    /// instead of silent.
+    /// </remarks>
+    private static ValidationWarning UnitsDisagree(
+        ElementTakeoff element,
+        QuantityUnit foreign,
+        OpeningsThreshold threshold) =>
+        ValidationWarning.ForElement(
+            element,
+            $"Measured in {Describe(foreign)} but the openings threshold is in "
+                + $"{Describe(threshold.Unit)}. The comparison was refused rather "
+                + "than converted, so this element has no metrado.");
+
+    /// <summary>
+    /// Names a unit for a user-facing message, without throwing on one that was
+    /// never declared — an undeclared unit is precisely what such a message is
+    /// most likely to be reporting.
+    /// </summary>
+    private static string Describe(QuantityUnit unit) =>
+        Enum.IsDefined(typeof(QuantityUnit), unit) ? unit.Symbol() : "an undeclared unit";
 
     /// <summary>
     /// Reports extraction input that contradicts its own gross quantity.
