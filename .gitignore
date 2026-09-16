@@ -1,0 +1,34 @@
+# Machine-local tooling state.
+# Holds absolute paths that do not resolve on another checkout, and is
+# regenerable. Not project content.
+.atl/
+
+# .NET build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+*.user
+*.suo
+
+# NuGet
+*.nupkg
+packages/
+.packages/
+
+# Test and coverage output
+[Tt]est[Rr]esult*/
+coverage*.json
+coverage*.xml
+*.coverage
+
+# Editors
+.vs/
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

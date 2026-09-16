@@ -1,0 +1,63 @@
+# openspec/config.yaml
+schema: spec-driven
+
+context: |
+  Product: Revit add-in extracting budget line items (partidas) with
+  quantities (metrado) from a BIM model, exported to Excel as
+  capitulos -> partidas -> lineas de medicion.
+  Stack: C#/.NET (target Revit version not yet decided).
+  Dev host: macOS ARM64, no local dotnet/Revit; build/run/debug happens
+  on a remote Windows host over RDP.
+  Repository: currently empty (no source, no build file, no CI).
+
+strict_tdd: false
+strict_tdd_reason: >
+  Zero projects discovered in the workspace (repository is empty).
+  No workspace-level test command exists. Per the no-runner fallback,
+  Strict TDD Mode defaults to false. Additionally this macOS ARM64
+  host cannot run dotnet or Revit locally, so no test command can be
+  verified from here even once code exists; re-evaluate once the
+  remote Windows build/test loop is defined during design.
+
+projects: []
+# No projects discovered yet. Once the Revit add-in project(s) are
+# scaffolded (likely on the remote Windows host), add entries here:
+#   - path: "src/RevitPlugin"
+#     stack: "C#/.NET"
+#     test_command: ""
+#     framework: ""
+
+open_questions:
+  - Target Revit version(s) to support (drives .NET 8 vs .NET Framework 4.8)
+  - Test framework for the Windows host (xUnit/NUnit are likely candidates)
+  - Excel export library (e.g. ClosedXML, EPPlus, OpenXML SDK)
+  - Revit API access pattern for extracting quantities/metrado data
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+    - Flag any decision that requires the remote Windows/Revit environment to validate
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Document architecture decisions with rationale
+    - Explicitly decide target Revit version(s) and .NET runtime (8 vs Framework 4.8)
+    - Decide the test framework and where tests run (remote Windows host)
+    - Decide the Excel export library
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+    - Separate tasks that require the remote Windows/Revit host from tasks doable on macOS (editing, planning)
+  apply:
+    guidelines:
+      - Follow existing code patterns once established
+      - Do not assume a local dotnet/Revit toolchain is available on this host
+    tdd: false
+    test_command: ""
+  verify:
+    test_command: ""
+    build_command: ""
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas
