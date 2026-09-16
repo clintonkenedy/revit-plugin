@@ -53,7 +53,10 @@ public sealed class BoundaryModeTests
     [Fact]
     public void TheDefaultModeIsExclusiveResolvedByName()
     {
-        Assert.Equal(Enum.Parse<BoundaryMode>("Exclusive"), Defaults.Mode);
+        BoundaryMode namedExclusive = Enum.Parse<BoundaryMode>("Exclusive");
+        BoundaryMode productDefault = Defaults.Mode;
+
+        Assert.Equal(namedExclusive, productDefault);
     }
 
     /// <summary>
