@@ -41,4 +41,21 @@ public static class Defaults
     /// budgets from one model with no way to tell them apart.
     /// </remarks>
     public const BoundaryMode Mode = BoundaryMode.Exclusive;
+
+    /// <summary>
+    /// The default openings threshold for a category measured by area, in square
+    /// metres.
+    /// </summary>
+    /// <remarks>
+    /// Named for the same reason the mode is: it decides which openings are added
+    /// back, so it decides the budget. Every scenario in the
+    /// <c>metrado-measurement</c> specification is written against 1.0 m², and task
+    /// 2.2 keeps it for walls when the six-category table arrives.
+    /// <para>
+    /// The unit is in the name because the number is meaningless without it — a
+    /// threshold is comparable only against quantities in its own unit, and Domain
+    /// never converts.
+    /// </para>
+    /// </remarks>
+    public const double AreaThresholdSquareMetres = 1.0;
 }
