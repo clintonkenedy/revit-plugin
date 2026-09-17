@@ -21,15 +21,22 @@ Four assemblies, one Revit boundary. `Metrado.Revit2027` alone references the Re
 
 ## Configuration Resolution and Defaults
 
-`CriteriaSet.Default` is a built-in constant in Domain, not a file: Walls → area, unit `m2`, ordered sources, threshold with `Defaults.Mode`. **The default mode is `exclusive`, pinned by that named constant and never by enum ordinal**, so reordering `BoundaryMode` cannot silently flip the metrado convention.
+`CriteriaSet.Default` is a built-in constant in Domain, not a file: Walls → area, unit `m2`, ordered sources, threshold `Defaults.AreaThresholdSquareMetres` with `Defaults.Mode`. **The default mode is `exclusive`, pinned by that named constant and never by enum ordinal**, so reordering `BoundaryMode` cannot silently flip the metrado convention. The threshold value is named for the same reason: it decides which openings are added back, so it decides the budget.
 
-Resolution is total — absence is never an error:
+The locator reports **three** states, not text-or-null (residual finding N3). Null has room for two facts and the locator has three, so "the file is there and could not be read" — permissions, an exclusive lock, a failing disk — would have to borrow null from "there is no file". Those two demand opposite responses: absence must fall back to the defaults, and a file that was supplied but could not be honoured must stop the run. One representation forces the run to pick one and be wrong about the other, invisibly, since the export still succeeds.
 
-| Input | Outcome | `ConfigSource` |
+Absence is never an error; a supplied file is never ignored:
+
+| `CriteriaFileLookup` | Outcome | `ConfigSource` |
 |---|---|---|
-| No file (locator returns `null`) | `Ok(CriteriaSet.Default)` | `BuiltInDefaults` |
-| File parses | `Ok(Merge(Default, overrides))` | `File` |
-| File malformed / unknown category / unsupported unit / negative threshold / invalid mode | `Err(ConfigError)` — run stops, no workbook | — |
+| `Absent` — nothing was there to read | `Ok(CriteriaSet.Default)` | `BuiltInDefaults` |
+| `Found(text)` and it parses | `Ok(Merge(Default, overrides))` | `File` |
+| `Found(text)` and malformed / unknown category / unsupported unit / negative threshold / invalid mode | `Err(ConfigError)` — run stops, no workbook | — |
+| `Unreadable(ConfigError)` — the file exists and I/O or permissions refused it | `Err(ConfigError)`, the locator's own, naming the file — run stops, no workbook | — |
+
+**I1 staging.** The criteria-file requirement is tagged I2 and its reader is task 2.1, so I1 ships no parser and the `Found` row above has no implementation yet. I1 therefore answers `Found` with `Err(ConfigError)` naming the file and stating that this version cannot read criteria files — because the specification's "MUST NOT silently fall back to defaults when a file was supplied" is unconditional and does not ask *why* the file could not be honoured. That error carries no `ConfigLocation`: nothing was parsed, and reporting line 0 would send the estimator hunting a syntax error in a file that is probably valid. Task 2.1 replaces that one branch.
+
+`EffectiveCriteria` keeps `Source` and `Path` in agreement by construction. A `File` run must name its file, and `BuiltInDefaults` must not carry one — otherwise the completion report reads "criteria from criteria.json" for a run that honoured no file, which is the silent fallback wearing a filename. The path a caller probed is a different fact from the path in force, and resolution drops it on the `Absent` branch.
 
 `Merge` is per-category then per-field coalesce: a category absent from the file keeps its default entirely; a present category inherits every field left `null` — threshold, mode, unit and sources alike. Unknown category names are rejected before merging, so a typo fails loudly instead of being ignored.
 
@@ -39,12 +46,13 @@ Resolution is total — absence is never an error:
          │  (sole Revit API reference)
          ▼
     Metrado.Revit2027   ExportTakeoffCommand : IExternalCommand
-      ExtractionService ── UnitUtils.ConvertFromInternalUnits ───┐
-      CriteriaFileLocator ─► text | null ─► Metrado.Configuration│ pure
-         ▼ ElementTakeoff[]               EffectiveCriteria ◄────┘
+      ExtractionService ── UnitUtils.ConvertFromInternalUnits ──────────┐
+      CriteriaFileLocator ─► CriteriaFileLookup ─► Metrado.Configuration│ pure
+                             (Found | Absent | Unreadable)              │
+         ▼ ElementTakeoff[]                     EffectiveCriteria ◄─────┘
     Metrado.Domain
       CodificationChain: AssemblyCode → Keynote → Shared → Rule → Unclassified
-      SelectSource (first with a value) ─► Apply(raw, openings[], threshold)
+      Measure = SelectSource (first with a value) ─► Apply(element, raw, openings[], threshold)
          ▼
       TakeoffResult (capitulo → partida → linea, warnings) + RunReport
          ├──────────────────────────► Metrado.Excel ── ClosedXML ──► .xlsx
@@ -55,7 +63,7 @@ Resolution is total — absence is never an error:
 | File | Action | Description |
 |---|---|---|
 | `src/Metrado.Domain/` | Create | `netstandard2.0;net10.0`, **no third-party deps**. DTOs, defaults, merge, chain, rule, `Result<,>` |
-| `src/Metrado.Configuration/` | Create | `net10.0`, `System.Text.Json` (in-box). JSON text → overrides |
+| `src/Metrado.Configuration/` | Create | `net10.0`, `System.Text.Json` (in-box). Owns resolution (`CriteriaResolver.Resolve`): `CriteriaFileLookup` → `EffectiveCriteria`, and JSON text → overrides |
 | `src/Metrado.Excel/` | Create | `net10.0`, ClosedXML. Workbook writer |
 | `src/Metrado.Revit2027/` | Create | `net10.0-windows`, `Nice3point.Revit.Api.*` 2027.2.0. `IExternalApplication`, ribbon, adapter, `ExportTakeoffCommand`, `SmokeCommand`, `Metrado.addin` |
 | `tests/Metrado.{Domain,Configuration,Excel}.Tests/` | Create | xUnit; Excel adds golden `.xlsx` fixtures |
@@ -91,12 +99,20 @@ public readonly record struct PartidaKey(string Capitulo, string PartidaCode);
 **Grouping key.** A partida is keyed by `PartidaKey` — capitulo plus **the code the chain resolved** — and by nothing else. Two distinct types resolving to `C1010` yield exactly one partida holding every contributing instance as its own linea. `TypeKey` is *not* a grouping key; it attributes type-level parameter reads and lets the writer name contributing types. `SourceKey` stays a string so I2's user-nominated sources need no domain change.
 
 ```csharp
-public enum BoundaryMode { Exclusive, Inclusive }        // closed domain, no third value
-public static class Defaults { public const BoundaryMode Mode = BoundaryMode.Exclusive; }
+// Members are numbered from 1 throughout, so the zero every C# enum field can reach
+// names no state and an unset value is detectable instead of silently meaning the
+// first member. This is what makes "never by enum ordinal" enforceable rather than
+// merely asserted.
+public enum BoundaryMode { Exclusive = 1, Inclusive = 2 }   // closed domain, no third value
+public static class Defaults {
+    public const BoundaryMode Mode = BoundaryMode.Exclusive;
+    public const double AreaThresholdSquareMetres = 1.0;    // the default area threshold, named
+}
 
 public readonly record struct OpeningsThreshold {        // valid by construction, unit-carrying
     public double Value { get; } public QuantityUnit Unit { get; } public BoundaryMode Mode { get; }
-    public static Result<OpeningsThreshold, ConfigError> TryCreate(double v, QuantityUnit u, BoundaryMode m);
+    public static Result<OpeningsThreshold, ConfigError> TryCreate(
+        double v, QuantityUnit u, BoundaryMode m, string? category = null);  // named in the error
 }
 
 public sealed record CategoryCriterion(string Category, QuantityUnit Unit,
@@ -105,28 +121,66 @@ public sealed record CategoryOverride(string Category, QuantityUnit? Unit,
     IReadOnlyList<string>? Sources, double? Threshold, BoundaryMode? Mode);  // null = inherit
 public sealed record CriteriaSet(IReadOnlyDictionary<string, CategoryCriterion> ByCategory)
     { public static CriteriaSet Default { get; } }
-public enum ConfigSource { BuiltInDefaults, File }
+public enum ConfigSource { BuiltInDefaults = 1, File = 2 }
+
+// Source and Path are consistent by construction: File must name its file,
+// BuiltInDefaults must not carry one. See Configuration Resolution above.
 public sealed record EffectiveCriteria(CriteriaSet Criteria, ConfigSource Source, string? Path);
 
-public static Result<CriteriaSet, ConfigError> Merge(CriteriaSet defaults, IReadOnlyList<CategoryOverride> o);
-public static Result<EffectiveCriteria, ConfigError> Resolve(string? jsonText, string? path);  // null = no file
+// The locator's three states. Match is the only way to the text and to the error,
+// so three states cannot be sorted back into two on the way out — and the type
+// deliberately exposes no discriminator, because any single bool would partition
+// three into two and re-open N3 in one honest-looking line.
+public sealed class CriteriaFileLookup {
+    public static CriteriaFileLookup Found(string text);          // empty/whitespace allowed; null is not a reading
+    public static CriteriaFileLookup Absent { get; }
+    public static CriteriaFileLookup Unreadable(ConfigError e);   // error required: it must name the file
+    public T Match<T>(Func<string, T> found, Func<T> absent, Func<ConfigError, T> unreadable);
+}
 
-public static Quantity? SelectSource(ElementTakeoff e, CategoryCriterion c);  // first with a value; null = none
-public static MetradoOutcome Apply(Quantity raw, IReadOnlyList<Quantity> openings, OpeningsThreshold t);
+// Two states, so a measured 0.0 cannot impersonate "no source had a value".
+// Match is the only route to the quantity, which is what makes Apply unreachable
+// without one — Quantity? would not, because GetValueOrDefault() manufactures 0.0.
+public sealed class SourceSelection {
+    public static SourceSelection None { get; } public static SourceSelection Of(Quantity q);
+    public bool HasQuantity { get; } public T Match<T>(Func<Quantity, T> selected, Func<T> none);
+}
 
-public enum MetradoStatus { Measured, NoSource, UnitMismatch }
+// The functions above are owned as set out in the Function Ownership table below.
+public enum MetradoStatus { Measured = 1, UnitMismatch = 2, NoSource = 3 }  // I2 adds Counted (N1)
 public sealed record MetradoOutcome(MetradoStatus Status, MetradoResult? Result, ValidationWarning? Warning);
 public sealed record MetradoResult(Quantity Metrado, Quantity Raw, Quantity Gross,
     BoundaryMode AppliedMode, double AppliedThreshold, bool ClampedToGross);
 
-public sealed record RunReport(int ExportedLines, int UnclassifiedCount, int WarningCount,
-    ConfigSource ConfigSource, string? ConfigPath, IReadOnlyList<AppliedCriterion> Applied,
-    IReadOnlyList<ValidationWarning> Warnings, string WorkbookPath);
+// Staged deliberately. WarningCount and NoMeasurableElements are DERIVED, never
+// stored: a count carried beside the list it counts is a second home for one fact,
+// and the two only ever diverge in the direction that under-reports. ConfigSource /
+// ConfigPath arrive with the completion dialog that reads them (1.24) and
+// WorkbookPath with the writer that produces it (1.16) — a field no producer can
+// fill yet would have to be defaulted, and a defaulted provenance is a claim.
+public sealed record RunReport(int ExportedLines, int UnclassifiedCount,
+    IReadOnlyList<AppliedCriterion> Applied, IReadOnlyList<ValidationWarning> Warnings)
+{
+    public bool NoMeasurableElements { get; }   // ExportedLines == 0
+    public int WarningCount { get; }            // Warnings.Count
+}
 
 public interface ICodeResolver { string? Resolve(ElementTakeoff e); }  // null = no match
 ```
 
-**No metrado is a status, not a number.** `NoSource` carries `Result = null`, so "measured as 0.0" and "no source yielded a value" are different types, not the same double; `Apply` is unreachable without a selected `Quantity`, so it cannot invent a measured zero. `UnitMismatch` fires when any opening's or the raw quantity's `Unit` differs from the threshold's `Unit`: the comparison is refused rather than performed across unit systems. Domain never converts — conversion stays in the Revit layer.
+**Function ownership** (residual finding N4 — the interface listing above no longer said which of the four projects owns which function):
+
+| Owner | Function |
+|---|---|
+| `Metrado.Domain` | `CriteriaSet.Merge(CriteriaSet defaults, IReadOnlyList<CategoryOverride> o) → Result<CriteriaSet, ConfigError>` |
+| `Metrado.Domain` | `Measurement.SelectSource(ElementTakeoff e, CategoryCriterion c) → SourceSelection` |
+| `Metrado.Domain` | `Measurement.Apply(ElementTakeoff e, Quantity raw, IReadOnlyList<Quantity> openings, OpeningsThreshold t) → MetradoOutcome` |
+| `Metrado.Domain` | `Measurement.Measure(ElementTakeoff e, CategoryCriterion c) → MetradoOutcome` — the composition callers use |
+| **`Metrado.Configuration`** | `CriteriaResolver.Resolve(CriteriaFileLookup lookup, string? path) → Result<EffectiveCriteria, ConfigError>` |
+
+Resolution belongs to `Metrado.Configuration` because it ends in reading a criteria file and the JSON reader lives there (decision 5). The value types it produces stay in Domain: `RunReport` reports the provenance, and Domain cannot reference this assembly — so `ConfigSource` and `EffectiveCriteria` could not live anywhere else without duplicating the enum.
+
+**No metrado is a status, not a number.** `NoSource` carries `Result = null`, so "measured as 0.0" and "no source yielded a value" are different types, not the same double; `Apply` is unreachable without a selected `Quantity`, so it cannot invent a measured zero. `Measurement.Measure` is the composition that keeps that guarantee: it reaches `Apply` only from inside `SourceSelection.Match`'s selected branch, so there is no expression of type `Quantity` derivable from an unmeasured element. `UnitMismatch` fires when any opening's or the raw quantity's `Unit` differs from the threshold's `Unit`: the comparison is refused rather than performed across unit systems. Domain never converts — conversion stays in the Revit layer.
 
 **`AppliedMode` MUST be written into the workbook**, not merely carried. `ExportTakeoffCommand` shows `RunReport` in a Revit `TaskDialog` on completion — exported total, unclassified count, effective criteria with thresholds and modes, whether no configuration file was found, and the warning list — satisfying "visible to the user without opening the workbook".
 
