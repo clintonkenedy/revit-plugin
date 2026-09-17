@@ -28,6 +28,23 @@ public sealed record RunReport(
     IReadOnlyList<AppliedCriterion> Applied,
     IReadOnlyList<ValidationWarning> Warnings)
 {
+    /// <summary>Whether the run found nothing it could measure.</summary>
+    /// <remarks>
+    /// An empty model is not a failure, but it is not a success that found
+    /// quantities either, and the difference is invisible in a report that only
+    /// carries counts: "0 exported" reads like a completed export. Stating the
+    /// condition as its own fact is what stops a run over the wrong model, or over
+    /// a model whose categories are all unsupported, from being presented as a
+    /// finished budget.
+    /// <para>
+    /// Being unable to <em>code</em> an element is a different condition entirely —
+    /// those elements were measured and are reported by
+    /// <see cref="UnclassifiedCount"/>, so a run made up entirely of unclassified
+    /// lines did find measurable elements.
+    /// </para>
+    /// </remarks>
+    public bool NoMeasurableElements => ExportedLines == 0;
+
     /// <summary>How many warnings the run raised.</summary>
     /// <remarks>
     /// Derived rather than stored. A count carried alongside the list it counts is
@@ -42,7 +59,7 @@ public sealed record RunReport(
         IReadOnlyList<Partida> partidas = Guard.RequiredValue(result, nameof(result)).Partidas;
 
         return new RunReport(
-            ExportedLines: partidas.Sum(partida => partida.Lineas.Count),
+            ExportedLines: result.LineCount,
             UnclassifiedCount: partidas
                 .Where(partida => partida.IsUnclassified)
                 .Sum(partida => partida.Lineas.Count),

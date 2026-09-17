@@ -6,6 +6,15 @@ namespace Metrado.Domain;
 /// </summary>
 public sealed record TakeoffResult(IReadOnlyList<Partida> Partidas)
 {
+    /// <summary>How many lineas de medicion this result holds.</summary>
+    /// <remarks>
+    /// Counted across the partidas rather than stored, so it cannot drift from the
+    /// lines it counts. This is the figure the "empty measurement set" requirement
+    /// is stated in: a result with zero lines measured nothing, whatever the model
+    /// happened to contain.
+    /// </remarks>
+    public int LineCount => Partidas.Sum(partida => partida.Lineas.Count);
+
     /// <summary>
     /// Groups measured lines into partidas, keyed by capitulo plus resolved code
     /// and by nothing else.
