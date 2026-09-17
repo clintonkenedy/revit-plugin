@@ -115,4 +115,20 @@ public sealed class CriteriaFileLookup
             _ => unreadable(_error!),
         };
     }
+
+    /// <summary>
+    /// Overridden so a failing assertion names the state.
+    /// </summary>
+    /// <remarks>
+    /// The inherited implementation prints the type name for all three states, which
+    /// would render an absent file and an unreadable one identically in exactly the
+    /// diagnostics meant to tell them apart. The text is summarised, never echoed: a
+    /// criteria file can be large, and this is a label, not a dump.
+    /// </remarks>
+    public override string ToString() => _state switch
+    {
+        State.Found => $"Found ({_text!.Length} characters)",
+        State.Absent => "Absent",
+        _ => $"Unreadable: {_error!.Message}",
+    };
 }

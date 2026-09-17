@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace Metrado.Domain.Tests;
 
 /// <summary>
@@ -200,4 +202,82 @@ public sealed class CriteriaFileLookupTests
             Assert.Throws<ArgumentException>(
                 () => found.Match(text => text, () => "absent", null!)).ParamName);
     }
+
+    /// <summary>
+    /// The three states are distinguishable in a diagnostic message.
+    /// </summary>
+    /// <remarks>
+    /// The inherited <c>ToString</c> prints the type name for all three, so a failing
+    /// assertion would report "absent" and "unreadable" identically — the very
+    /// confusion this type exists to prevent, reproduced in the tooling meant to
+    /// detect it. The found text is summarised rather than echoed: a criteria file
+    /// can be large, and a diagnostic is not a place to dump it.
+    /// </remarks>
+    [Fact]
+    public void TheThreeStatesAreTellableApartInADiagnosticMessage()
+    {
+        Assert.Equal("Found (2 characters)", CriteriaFileLookup.Found("{}").ToString());
+        Assert.Equal("Absent", CriteriaFileLookup.Absent.ToString());
+        Assert.Equal(
+            "Unreadable: Permission denied.",
+            CriteriaFileLookup.Unreadable(new ConfigError("Permission denied.")).ToString());
+    }
+
+    /// <summary>
+    /// Nothing on this type lets a caller sort three states into two outside
+    /// <see cref="CriteriaFileLookup.Match{T}"/>.
+    /// </summary>
+    /// <remarks>
+    /// This is the structural half of N3, and it is why this type carries no public
+    /// discriminator even though <see cref="SourceSelection"/> deliberately does.
+    /// Any single <c>bool</c> — <c>WasFound</c>, <c>HasText</c>, <c>IsAbsent</c> —
+    /// partitions three states into two, and every such partition puts an unreadable
+    /// file on the same side as one of the other two. The obvious caller,
+    /// <c>if (!lookup.WasFound) useDefaults();</c>, is then the exact silent fallback
+    /// the spec forbids, written in one honest-looking line. Requiring
+    /// <see cref="CriteriaFileLookup.Match{T}"/> makes the compiler demand a decision
+    /// for all three.
+    /// <para>
+    /// Handing out the text or the error directly would reopen the same hole, since
+    /// a null return is again two-valued.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void NoPublicMemberSortsTheThreeStatesIntoTwoOutsideMatch()
+    {
+        MemberInfo[] surface = typeof(CriteriaFileLookup).GetMembers(
+            BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static
+                | BindingFlags.DeclaredOnly);
+
+        // Proves reflection actually inspected the type rather than an empty set.
+        Assert.Contains(nameof(CriteriaFileLookup.Match), surface.Select(member => member.Name));
+
+        Type[] twoValued = [typeof(bool), typeof(bool?), typeof(string), typeof(ConfigError)];
+
+        string[] leaks = surface
+            // ToString is a label for diagnostics, not a payload accessor, and it is
+            // pinned to name all three states rather than split them.
+            .Where(member => member.Name != nameof(ToString))
+            .Where(member => twoValued.Any(type => Yields(member, type)))
+            .Select(member => member.Name)
+            .ToArray();
+
+        Assert.True(
+            leaks.Length == 0,
+            "These members let a caller branch on the lookup without handling all "
+                + "three states, so an unreadable criteria file can silently take the "
+                + "fallback reserved for an absent one: " + string.Join(", ", leaks));
+    }
+
+    /// <summary>Whether reading this member produces a value of the given type.</summary>
+    private static bool Yields(MemberInfo member, Type type) => member switch
+    {
+        PropertyInfo property => property.PropertyType == type,
+        FieldInfo field => field.FieldType == type,
+
+        // Covers conversion operators too: op_Implicit and op_Explicit are methods,
+        // and an implicit conversion to string would be the quietest leak of all.
+        MethodInfo method => method.ReturnType == type,
+        _ => false,
+    };
 }
