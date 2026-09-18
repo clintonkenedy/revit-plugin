@@ -29,6 +29,36 @@ internal static class WrittenWorkbook
         [.. sheet.Row(row).CellsUsed().Select(cell => cell.GetString())];
 
     /// <summary>
+    /// Every used cell of the sheet, one string per row, blanks included.
+    /// </summary>
+    /// <remarks>
+    /// Whole rows rather than selected columns, so a comparison between two
+    /// workbooks cannot pass by agreeing on the columns the test happened to look
+    /// at while disagreeing everywhere else.
+    /// </remarks>
+    internal static IReadOnlyList<string> Grid(IXLWorksheet sheet)
+    {
+        IXLRow? lastRow = sheet.LastRowUsed();
+        IXLColumn? lastColumn = sheet.LastColumnUsed();
+
+        if (lastRow is null || lastColumn is null)
+        {
+            return [];
+        }
+
+        return
+        [
+            .. Enumerable
+                .Range(1, lastRow.RowNumber())
+                .Select(row => string.Join(
+                    " | ",
+                    Enumerable
+                        .Range(1, lastColumn.ColumnNumber())
+                        .Select(column => sheet.Cell(row, column).GetString()))),
+        ];
+    }
+
+    /// <summary>
     /// The rows below <paramref name="headerRow"/> that carry content.
     /// </summary>
     internal static IReadOnlyList<int> BodyRows(IXLWorksheet sheet, int headerRow)

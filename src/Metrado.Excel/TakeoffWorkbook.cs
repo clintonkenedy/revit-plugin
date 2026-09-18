@@ -66,7 +66,7 @@ public static class TakeoffWorkbook
                 sheet.Cell(row, MetradoColumn).Value = partida.Total.Value;
                 row++;
 
-                foreach (Linea linea in partida.Lineas)
+                foreach (Linea linea in InOrder(partida))
                 {
                     sheet.Cell(row, LevelColumn).Value = LineaLevel;
                     sheet.Cell(row, CapituloColumn).Value = capitulo.Key;
@@ -79,8 +79,39 @@ public static class TakeoffWorkbook
         }
     }
 
+    /// <summary>
+    /// The partidas arranged into capitulos, both in the order the workbook must
+    /// present them.
+    /// </summary>
+    /// <remarks>
+    /// Sorting before grouping is what puts the capitulos in order too: grouping
+    /// keeps the order each key first appears in, so an already-sorted sequence
+    /// yields sorted groups.
+    /// <para>
+    /// Every comparison is ordinal. The default string comparer is culture-aware,
+    /// which would make the row order of a budget a property of the machine that
+    /// exported it — and the requirement is that identical input produces identical
+    /// ordering, not ordering identical to the exporter's locale.
+    /// </para>
+    /// </remarks>
     private static IEnumerable<IGrouping<string, Partida>> ByCapitulo(TakeoffResult result) =>
-        result.Partidas.GroupBy(partida => partida.Key.Capitulo, StringComparer.Ordinal);
+        result
+            .Partidas
+            .OrderBy(partida => partida.Key.Capitulo, StringComparer.Ordinal)
+            .ThenBy(partida => partida.Key.PartidaCode, StringComparer.Ordinal)
+            .GroupBy(partida => partida.Key.Capitulo, StringComparer.Ordinal);
+
+    /// <summary>The measurement lines of a partida, in the order they are written.</summary>
+    /// <remarks>
+    /// <c>UniqueId</c> is the stable per-line key: it is unique per element and
+    /// non-empty by construction, so in I1 — where one element produces one line —
+    /// it orders the lines totally rather than merely consistently. The I3 material
+    /// layers that put several lines under one host <c>UniqueId</c> will need a
+    /// second key beside it, because ties here fall back to arrival order and
+    /// arrival order is exactly what must not decide anything.
+    /// </remarks>
+    private static IEnumerable<Linea> InOrder(Partida partida) =>
+        partida.Lineas.OrderBy(linea => linea.Element.UniqueId, StringComparer.Ordinal);
 
     /// <summary>The sum of a capitulo's partida totals.</summary>
     /// <remarks>
