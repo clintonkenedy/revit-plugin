@@ -22,4 +22,12 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!--
+    The stored reference workbooks. Copied beside the test assembly so the
+    assertions read the same bytes that are committed to source control.
+  -->
+  <ItemGroup>
+    <None Include="Goldens/**/*.xlsx" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
