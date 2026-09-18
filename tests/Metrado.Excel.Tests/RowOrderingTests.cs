@@ -20,7 +20,7 @@ namespace Metrado.Excel.Tests;
 public sealed class RowOrderingTests
 {
     private const string SheetName = "Metrado";
-    private const int HeaderRow = 1;
+    private const int HeaderRow = 2;
 
     /// <summary>
     /// The same five lines, arriving in two unrelated orders. Neither sequence is
@@ -76,8 +76,9 @@ public sealed class RowOrderingTests
         IReadOnlyList<string> rows = WrittenWorkbook.Grid(first.Worksheet(SheetName));
 
         // Guards the comparison itself: two empty sheets are also identical, and
-        // that agreement would prove nothing about ordering.
-        Assert.Equal(11, rows.Count);
+        // that agreement would prove nothing about ordering. Twelve rows: the
+        // exported-line summary, the headers, and the ten budget rows.
+        Assert.Equal(12, rows.Count);
         Assert.Equal(rows, WrittenWorkbook.Grid(second.Worksheet(SheetName)));
     }
 

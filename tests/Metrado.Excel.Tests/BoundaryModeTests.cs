@@ -20,7 +20,7 @@ namespace Metrado.Excel.Tests;
 public sealed class BoundaryModeTests
 {
     private const string SheetName = "Metrado";
-    private const int HeaderRow = 1;
+    private const int HeaderRow = 2;
 
     [Fact]
     public void EveryMeasurementLineRecordsTheConventionThatProducedItsMetrado()

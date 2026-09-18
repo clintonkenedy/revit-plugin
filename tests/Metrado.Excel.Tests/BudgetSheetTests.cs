@@ -19,7 +19,7 @@ namespace Metrado.Excel.Tests;
 public sealed class BudgetSheetTests
 {
     private const string SheetName = "Metrado";
-    private const int HeaderRow = 1;
+    private const int HeaderRow = 2;
 
     [Fact]
     public void TheBudgetSheetNamesEveryColumnAReaderNeedsToPlaceARow()

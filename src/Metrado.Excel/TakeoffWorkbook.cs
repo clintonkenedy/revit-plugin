@@ -24,7 +24,10 @@ public static class TakeoffWorkbook
     /// </remarks>
     public const string UnclassifiedSheetName = "Unclassified";
 
-    private const int HeaderRow = 1;
+    private const int SummaryRow = 1;
+    private const int HeaderRow = 2;
+
+    private const int SummaryCountColumn = 2;
 
     private const int LevelColumn = 1;
     private const int CapituloColumn = 2;
@@ -64,8 +67,30 @@ public static class TakeoffWorkbook
         workbook.SaveAs(destination);
     }
 
+    /// <summary>
+    /// Writes the coded budget, above it the count of the measurement lines it
+    /// carries.
+    /// </summary>
+    /// <remarks>
+    /// The specification requires an export over a model with no measurable
+    /// elements to produce a workbook "containing the headers and an explicit
+    /// zero-count summary" that "states that zero measurement lines were exported".
+    /// An empty sheet does not state that — it is an absence, and the reader cannot
+    /// tell a run that measured nothing from an export that never got this far.
+    /// Written unconditionally for the same reason the unclassified count is.
+    /// <para>
+    /// The count is of the measurement rows on this sheet, so it reconciles with
+    /// the rows beneath it exactly as the subtotals do. Uncoded elements were
+    /// measured but were not exported as budget lines, and they are counted on
+    /// their own sheet — one count per block, each answerable from the block it
+    /// heads.
+    /// </para>
+    /// </remarks>
     private static void WriteBudget(IXLWorksheet sheet, TakeoffResult result)
     {
+        sheet.Cell(SummaryRow, LevelColumn).Value = "Measurement lines exported";
+        sheet.Cell(SummaryRow, SummaryCountColumn).Value = ExportedLines(result);
+
         sheet.Cell(HeaderRow, LevelColumn).Value = "Level";
         sheet.Cell(HeaderRow, CapituloColumn).Value = "Capitulo";
         sheet.Cell(HeaderRow, PartidaColumn).Value = "Partida";
@@ -219,6 +244,16 @@ public static class TakeoffWorkbook
     /// </remarks>
     private static IEnumerable<Linea> InOrder(Partida partida) =>
         partida.Lineas.OrderBy(linea => linea.Element.UniqueId, StringComparer.Ordinal);
+
+    /// <summary>
+    /// How many measurement lines the budget sheet exports.
+    /// </summary>
+    /// <remarks>
+    /// Counted off the same filtered sequence the rows are written from, so the
+    /// stated figure cannot drift from the rows it heads.
+    /// </remarks>
+    private static int ExportedLines(TakeoffResult result) =>
+        ByCapitulo(result).Sum(capitulo => capitulo.Sum(partida => partida.Lineas.Count));
 
     /// <summary>The sum of a capitulo's partida totals.</summary>
     /// <remarks>

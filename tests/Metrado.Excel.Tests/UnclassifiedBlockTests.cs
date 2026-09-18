@@ -21,7 +21,7 @@ public sealed class UnclassifiedBlockTests
 {
     private const string BudgetSheet = "Metrado";
     private const string UnclassifiedSheet = "Unclassified";
-    private const int BudgetHeaderRow = 1;
+    private const int BudgetHeaderRow = 2;
     private const int EntryHeaderRow = 3;
 
     [Fact]
