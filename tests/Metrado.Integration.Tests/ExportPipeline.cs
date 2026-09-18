@@ -1,11 +1,14 @@
+using ClosedXML.Excel;
 using Metrado.Configuration;
 using Metrado.Domain;
+using Metrado.Excel;
 
 namespace Metrado.Integration.Tests;
 
 /// <summary>
-/// The export, composed: resolve the criteria, measure every element under the
-/// criterion for its category, codify it, group the lines and report the run.
+/// The whole export, composed: resolve the criteria, measure every element under
+/// the criterion for its category, codify it, group the lines, report the run and
+/// write the workbook.
 /// </summary>
 /// <remarks>
 /// <b>This composition is test-side, and that is a known gap rather than a
@@ -79,7 +82,7 @@ internal static class ExportPipeline
 
         TakeoffResult result = TakeoffResult.Group(lineas);
 
-        return new ExportRun(criteria, result, RunReport.For(result, warnings));
+        return new ExportRun(criteria, result, RunReport.For(result, warnings), Written(result));
     }
 
     /// <summary>The criterion the criteria in force define for this element's category.</summary>
@@ -125,5 +128,24 @@ internal static class ExportPipeline
         throw new InvalidOperationException(
             $"Element '{element.UniqueId}' was not measured ({outcome.Status}): "
                 + $"{outcome.Warning?.Condition ?? "no warning was raised"}.");
+    }
+
+    /// <summary>
+    /// The workbook, written out and read back from the bytes that were produced.
+    /// </summary>
+    /// <remarks>
+    /// Round-tripped through a <see cref="MemoryStream"/> rather than inspected in
+    /// memory, matching the writer's own suite: a workbook that is arranged
+    /// correctly in memory and fails to persist ships an empty budget, and only
+    /// reopening the bytes can tell the two apart. Nothing touches the file system,
+    /// so a run leaves no temporary file behind to clean up.
+    /// </remarks>
+    private static XLWorkbook Written(TakeoffResult result)
+    {
+        MemoryStream stream = new();
+        TakeoffWorkbook.Write(result, stream);
+        stream.Position = 0;
+
+        return new XLWorkbook(stream);
     }
 }

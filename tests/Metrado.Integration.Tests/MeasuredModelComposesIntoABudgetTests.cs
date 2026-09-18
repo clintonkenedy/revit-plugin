@@ -28,7 +28,7 @@ public sealed class MeasuredModelComposesIntoABudgetTests
     [Fact]
     public void AtLeastOneMeasuredMetradoDiffersFromTheRawRevitArea()
     {
-        ExportRun run = ExportPipeline.RunWithBuiltInDefaults(ModelFixture.Walls);
+        using ExportRun run = ExportPipeline.RunWithBuiltInDefaults(ModelFixture.Walls);
 
         MetradoResult measured = run.LineaOf(ModelFixture.CorrectedByOneOpening).Metrado;
 
@@ -50,7 +50,7 @@ public sealed class MeasuredModelComposesIntoABudgetTests
     [Fact]
     public void AWallWhoseOnlyOpeningExceedsTheThresholdKeepsItsRawArea()
     {
-        ExportRun run = ExportPipeline.RunWithBuiltInDefaults(ModelFixture.Walls);
+        using ExportRun run = ExportPipeline.RunWithBuiltInDefaults(ModelFixture.Walls);
 
         MetradoResult measured = run.LineaOf(ModelFixture.UncorrectedAboveThreshold).Metrado;
 
@@ -73,7 +73,7 @@ public sealed class MeasuredModelComposesIntoABudgetTests
     [Fact]
     public void OpeningsAreStillJudgedIndividuallyWhenTheirSumExceedsTheThreshold()
     {
-        ExportRun run = ExportPipeline.RunWithBuiltInDefaults(ModelFixture.Walls);
+        using ExportRun run = ExportPipeline.RunWithBuiltInDefaults(ModelFixture.Walls);
 
         Assert.Equal(15.0, ModelFixture.RawAreaOf(ModelFixture.CorrectedByThreeOpenings), 9);
         Assert.Equal(16.3, run.LineaOf(ModelFixture.CorrectedByThreeOpenings).Metrado.Metrado.Value, 9);
@@ -90,7 +90,7 @@ public sealed class MeasuredModelComposesIntoABudgetTests
     [Fact]
     public void ThePartidaTotalAddsUpTheCorrectedLinesAndNotTheRawAreas()
     {
-        ExportRun run = ExportPipeline.RunWithBuiltInDefaults(ModelFixture.Walls);
+        using ExportRun run = ExportPipeline.RunWithBuiltInDefaults(ModelFixture.Walls);
 
         Assert.Equal(49.0, ModelFixture.RawAreaTotalOfCodedWalls(), 9);
         Assert.Equal(50.9, run.PartidaOf(ModelFixture.CodedPartida).Total.Value, 9);
@@ -109,7 +109,7 @@ public sealed class MeasuredModelComposesIntoABudgetTests
     [Fact]
     public void TheUncodedWallIsMeasuredAndReachesTheResultSeparatelyFromTheCodedOnes()
     {
-        ExportRun run = ExportPipeline.RunWithBuiltInDefaults(ModelFixture.Walls);
+        using ExportRun run = ExportPipeline.RunWithBuiltInDefaults(ModelFixture.Walls);
 
         Assert.Equal(3, run.PartidaOf(ModelFixture.CodedPartida).Lineas.Count);
         Assert.Equal(20.0, run.LineaOf(ModelFixture.Uncoded).Metrado.Metrado.Value, 9);
@@ -128,7 +128,7 @@ public sealed class MeasuredModelComposesIntoABudgetTests
     [Fact]
     public void TheRunReportCountsEveryMeasuredLineAndSaysHowManyAreUnclassified()
     {
-        ExportRun run = ExportPipeline.RunWithBuiltInDefaults(ModelFixture.Walls);
+        using ExportRun run = ExportPipeline.RunWithBuiltInDefaults(ModelFixture.Walls);
 
         Assert.Equal(4, run.Report.ExportedLines);
         Assert.Equal(1, run.Report.UnclassifiedCount);
@@ -147,7 +147,7 @@ public sealed class MeasuredModelComposesIntoABudgetTests
     [Fact]
     public void TheRunReportNamesTheConventionTheLinesWereMeasuredUnder()
     {
-        ExportRun run = ExportPipeline.RunWithBuiltInDefaults(ModelFixture.Walls);
+        using ExportRun run = ExportPipeline.RunWithBuiltInDefaults(ModelFixture.Walls);
 
         AppliedCriterion applied = Assert.Single(run.Report.Applied);
 
