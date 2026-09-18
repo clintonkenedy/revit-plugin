@@ -53,6 +53,12 @@ projects:
     stack: "C#/.NET 10"
     test_command: "dotnet test tests/Metrado.Excel.Tests"
     framework: "xUnit"
+  # The only suite referencing more than one production assembly: it proves
+  # Configuration, Domain and Excel still compose. Added by task 1.18.
+  - path: "tests/Metrado.Integration.Tests"
+    stack: "C#/.NET 10"
+    test_command: "dotnet test tests/Metrado.Integration.Tests"
+    framework: "xUnit"
 
 open_questions:
   # Settled during design: Revit version (2027 only), Excel library
