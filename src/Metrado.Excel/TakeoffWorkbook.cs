@@ -12,6 +12,18 @@ public static class TakeoffWorkbook
     /// <summary>The sheet holding the coded budget.</summary>
     public const string BudgetSheetName = "Metrado";
 
+    /// <summary>
+    /// The sheet holding the elements no link of the codification chain could
+    /// code.
+    /// </summary>
+    /// <remarks>
+    /// A sheet of its own because the specification requires the block to be
+    /// "separate from the coded capitulos": an uncoded element belongs to no
+    /// partida, so a budget that listed it among the coded ones would be claiming
+    /// a code it does not have.
+    /// </remarks>
+    public const string UnclassifiedSheetName = "Unclassified";
+
     private const int HeaderRow = 1;
 
     private const int LevelColumn = 1;
@@ -23,6 +35,15 @@ public static class TakeoffWorkbook
     private const string CapituloLevel = "CAPITULO";
     private const string PartidaLevel = "PARTIDA";
     private const string LineaLevel = "LINEA";
+
+    private const int UnclassifiedLabelRow = 1;
+    private const int UnclassifiedCountRow = 2;
+    private const int UnclassifiedHeaderRow = 3;
+
+    private const int EntryUniqueIdColumn = 1;
+    private const int EntryCategoryColumn = 2;
+    private const int EntryFamilyColumn = 3;
+    private const int EntryTypeColumn = 4;
 
     /// <summary>Writes <paramref name="result"/> into <paramref name="destination"/>.</summary>
     /// <remarks>
@@ -37,6 +58,7 @@ public static class TakeoffWorkbook
         using XLWorkbook workbook = new();
 
         WriteBudget(workbook.Worksheets.Add(BudgetSheetName), result);
+        WriteUnclassified(workbook.Worksheets.Add(UnclassifiedSheetName), result);
 
         workbook.SaveAs(destination);
     }
@@ -80,6 +102,55 @@ public static class TakeoffWorkbook
     }
 
     /// <summary>
+    /// Writes the uncoded elements, whether or not there are any.
+    /// </summary>
+    /// <remarks>
+    /// The label, the count and the column headers are written unconditionally, so
+    /// a run where everything resolved to a code still states that zero elements
+    /// were left uncoded. Omitting the block when it is empty would leave the
+    /// reader unable to tell "nothing was uncoded" from "this export never looked",
+    /// and those are different facts about the model.
+    /// </remarks>
+    private static void WriteUnclassified(IXLWorksheet sheet, TakeoffResult result)
+    {
+        IReadOnlyList<Linea> uncoded = Uncoded(result);
+
+        sheet.Cell(UnclassifiedLabelRow, EntryUniqueIdColumn).Value = "Unclassified elements";
+        sheet.Cell(UnclassifiedCountRow, EntryUniqueIdColumn).Value = "Count";
+        sheet.Cell(UnclassifiedCountRow, EntryCategoryColumn).Value = uncoded.Count;
+
+        sheet.Cell(UnclassifiedHeaderRow, EntryUniqueIdColumn).Value = "UniqueId";
+        sheet.Cell(UnclassifiedHeaderRow, EntryCategoryColumn).Value = "Category";
+        sheet.Cell(UnclassifiedHeaderRow, EntryFamilyColumn).Value = "Family";
+        sheet.Cell(UnclassifiedHeaderRow, EntryTypeColumn).Value = "Type";
+
+        int row = UnclassifiedHeaderRow + 1;
+
+        foreach (Linea linea in uncoded)
+        {
+            sheet.Cell(row, EntryUniqueIdColumn).Value = linea.Element.UniqueId;
+            sheet.Cell(row, EntryCategoryColumn).Value = linea.Element.CategoryName;
+            sheet.Cell(row, EntryFamilyColumn).Value = linea.Element.FamilyName;
+            sheet.Cell(row, EntryTypeColumn).Value = linea.Element.TypeName;
+            row++;
+        }
+    }
+
+    /// <summary>
+    /// The lines of every partida the codification chain could not code, ordered
+    /// the same way the budget is.
+    /// </summary>
+    private static IReadOnlyList<Linea> Uncoded(TakeoffResult result) =>
+        [
+            .. result
+                .Partidas
+                .Where(partida => partida.IsUnclassified)
+                .SelectMany(partida => partida.Lineas)
+                .OrderBy(linea => linea.Element.CategoryName, StringComparer.Ordinal)
+                .ThenBy(linea => linea.Element.UniqueId, StringComparer.Ordinal),
+        ];
+
+    /// <summary>
     /// The partidas arranged into capitulos, both in the order the workbook must
     /// present them.
     /// </summary>
@@ -97,6 +168,7 @@ public static class TakeoffWorkbook
     private static IEnumerable<IGrouping<string, Partida>> ByCapitulo(TakeoffResult result) =>
         result
             .Partidas
+            .Where(partida => !partida.IsUnclassified)
             .OrderBy(partida => partida.Key.Capitulo, StringComparer.Ordinal)
             .ThenBy(partida => partida.Key.PartidaCode, StringComparer.Ordinal)
             .GroupBy(partida => partida.Key.Capitulo, StringComparer.Ordinal);
