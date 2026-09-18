@@ -11,9 +11,11 @@ namespace Metrado.Domain.Tests;
 /// actually selected. Asserting the resolved project list is the only
 /// positive proof that the cross-platform loop covers what it claims to.
 ///
-/// This lives in Metrado.Domain.Tests because the solution layout fixes the
-/// test projects at three (Domain, Configuration, Excel) and Domain.Tests is
-/// the one guaranteed to be inside every filter this repository will define.
+/// This lives in Metrado.Domain.Tests because Domain.Tests is the one suite
+/// guaranteed to be inside every filter this repository will define. The
+/// expected list below is maintained by hand on purpose: deriving it from the
+/// solution would make the assertion agree with whatever the solution says,
+/// which is the one thing it exists to check.
 /// </summary>
 public sealed class SolutionFilterTests
 {
@@ -28,10 +30,11 @@ public sealed class SolutionFilterTests
         "tests/Metrado.Configuration.Tests/Metrado.Configuration.Tests.csproj",
         "tests/Metrado.Domain.Tests/Metrado.Domain.Tests.csproj",
         "tests/Metrado.Excel.Tests/Metrado.Excel.Tests.csproj",
+        "tests/Metrado.Integration.Tests/Metrado.Integration.Tests.csproj",
     ];
 
     [Fact]
-    public void FilterResolvesToExactlyTheSixCrossPlatformProjects()
+    public void FilterResolvesToExactlyTheSevenCrossPlatformProjects()
     {
         string[] resolved = ReadFilteredProjects(RepositoryRoot());
 

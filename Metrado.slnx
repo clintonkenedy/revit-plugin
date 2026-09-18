@@ -9,5 +9,6 @@
     <Project Path="tests/Metrado.Configuration.Tests/Metrado.Configuration.Tests.csproj" />
     <Project Path="tests/Metrado.Domain.Tests/Metrado.Domain.Tests.csproj" />
     <Project Path="tests/Metrado.Excel.Tests/Metrado.Excel.Tests.csproj" />
+    <Project Path="tests/Metrado.Integration.Tests/Metrado.Integration.Tests.csproj" />
   </Folder>
 </Solution>

@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <!--
+    The only test project that references more than one production assembly.
+    That is the point: every other suite proves one assembly in isolation, and
+    this one proves they still compose. All three are named explicitly rather
+    than leaned on transitively, because the composition under test is exactly
+    the set of assemblies listed here.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Metrado.Configuration\Metrado.Configuration.csproj" />
+    <ProjectReference Include="..\..\src\Metrado.Domain\Metrado.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Metrado.Excel\Metrado.Excel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>
