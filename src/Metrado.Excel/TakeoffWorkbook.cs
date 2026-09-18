@@ -31,6 +31,7 @@ public static class TakeoffWorkbook
     private const int PartidaColumn = 3;
     private const int UniqueIdColumn = 4;
     private const int MetradoColumn = 5;
+    private const int BoundaryModeColumn = 6;
 
     private const string CapituloLevel = "CAPITULO";
     private const string PartidaLevel = "PARTIDA";
@@ -70,6 +71,7 @@ public static class TakeoffWorkbook
         sheet.Cell(HeaderRow, PartidaColumn).Value = "Partida";
         sheet.Cell(HeaderRow, UniqueIdColumn).Value = "UniqueId";
         sheet.Cell(HeaderRow, MetradoColumn).Value = "Metrado";
+        sheet.Cell(HeaderRow, BoundaryModeColumn).Value = "Boundary mode";
 
         int row = HeaderRow + 1;
 
@@ -95,11 +97,44 @@ public static class TakeoffWorkbook
                     sheet.Cell(row, PartidaColumn).Value = partida.Key.PartidaCode;
                     sheet.Cell(row, UniqueIdColumn).Value = linea.Element.UniqueId;
                     sheet.Cell(row, MetradoColumn).Value = linea.Metrado.Metrado.Value;
+                    sheet.Cell(row, BoundaryModeColumn).Value = Name(linea.Metrado.AppliedMode);
                     row++;
                 }
             }
         }
     }
+
+    /// <summary>
+    /// How the workbook spells a boundary convention.
+    /// </summary>
+    /// <remarks>
+    /// The specification and the criteria file both name the modes
+    /// <c>exclusive</c> and <c>inclusive</c>, and a reviewer reads the workbook
+    /// against the criteria that produced it. Rendering the enum member instead
+    /// would give one convention two spellings.
+    /// <para>
+    /// Written on the measurement line, which is where the fact already lives.
+    /// Repeating it on the capitulo row would be a second home for one value, and
+    /// the run report — which the completion dialog shows without opening the
+    /// workbook — already carries the per-capitulo convention.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// The mode names no declared convention. The export stops rather than
+    /// shipping a budget whose convention the workbook cannot state: an
+    /// unattributed metrado is exactly the ambiguity reporting the mode exists to
+    /// remove.
+    /// </exception>
+    private static string Name(BoundaryMode mode) => mode switch
+    {
+        BoundaryMode.Exclusive => "exclusive",
+        BoundaryMode.Inclusive => "inclusive",
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(mode),
+            mode,
+            "Not a declared boundary mode, so the workbook cannot record which "
+                + "convention produced the metrado."),
+    };
 
     /// <summary>
     /// Writes the uncoded elements, whether or not there are any.

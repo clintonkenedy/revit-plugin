@@ -85,7 +85,7 @@ public sealed class UnclassifiedBlockTests
 
         Assert.Equal(0, sheet.Cell(2, 2).GetDouble());
         Assert.Equal(
-            ["Level", "Capitulo", "Partida", "UniqueId", "Metrado"],
+            ["Level", "Capitulo", "Partida", "UniqueId", "Metrado", "Boundary mode"],
             WrittenWorkbook.RowText(workbook.Worksheet(BudgetSheet), BudgetHeaderRow));
     }
 
