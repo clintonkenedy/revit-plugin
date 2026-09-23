@@ -15,8 +15,8 @@ namespace Metrado.Configuration;
 /// <c>System.Text.Json</c> is in-box on <c>net10.0</c> but a five-package
 /// dependency on <c>netstandard2.0</c>, which would falsify decision D1 (see D5).
 /// The value types resolution produces — <see cref="EffectiveCriteria"/>,
-/// <see cref="ConfigSource"/> — stay in Domain, because <see cref="RunReport"/>
-/// reports the provenance and Domain cannot reference this assembly.
+/// <see cref="ConfigSource"/> — stay in Domain, beside the
+/// <see cref="CriteriaFileLookup"/> it consumes, where every layer can name them.
 /// </para>
 /// <para>
 /// Nothing here touches the file system. The locator that produces a
@@ -52,7 +52,7 @@ public static class CriteriaResolver
         ArgumentNullException.ThrowIfNull(lookup);
 
         return lookup.Match(
-            found: _ => Result<EffectiveCriteria, ConfigError>.Err(CannotHonourYet(path)),
+            found: text => FromFile(text, path),
             absent: BuiltInDefaults,
             unreadable: Result<EffectiveCriteria, ConfigError>.Err);
     }
@@ -63,8 +63,7 @@ public static class CriteriaResolver
     /// <remarks>
     /// <c>takeoff-configuration</c>, "Usable Defaults Without Any Configuration":
     /// the add-in "SHALL run correctly with no configuration file present" and
-    /// "Absence of configuration MUST NOT be an error". This is the only branch that
-    /// returns criteria in I1.
+    /// "Absence of configuration MUST NOT be an error".
     /// <para>
     /// The probed path is discarded rather than reported. A caller knows which path
     /// it looked at and passes it in for error reporting, but no file's contents are
@@ -79,44 +78,70 @@ public static class CriteriaResolver
             new EffectiveCriteria(CriteriaSet.Default, ConfigSource.BuiltInDefaults, path: null));
 
     /// <summary>
-    /// A criteria file was supplied and read, and this increment has no reader for
-    /// it, so the run stops.
+    /// A criteria file was supplied and read: its entries are laid over the
+    /// built-in criteria, or the run stops naming the file and the place in it.
     /// </summary>
     /// <remarks>
-    /// The "External, Versionable Criteria File" requirement is tagged I2 and its
-    /// reader is task 2.1, so a file arriving here is an input I1 cannot honour.
-    /// That leaves one spec-compliant response: "Invalid Configuration Fails Loudly"
-    /// states the system "MUST NOT silently fall back to defaults when a file was
-    /// supplied, because a silently ignored configuration produces a confidently
-    /// wrong budget". The MUST NOT is unconditional — it does not ask <em>why</em>
-    /// the file could not be honoured — so returning the defaults here is forbidden
-    /// however sympathetic the reason.
+    /// <c>takeoff-configuration</c>, "Invalid Configuration Fails Loudly": the
+    /// system "MUST NOT silently fall back to defaults when a file was supplied".
+    /// So every refusal, whether the file's shape (<see cref="CriteriaFile"/>) or
+    /// the product's criteria (<see cref="CriteriaSet.Merge"/>) found it, stops
+    /// the run as a <see cref="ConfigError"/> the command shows before any
+    /// workbook is written. A merge refusal is pointed at the entry of the
+    /// category it names, the last one when the category is repeated.
     /// <para>
-    /// Stopping is modelled as an <see cref="ConfigError"/> rather than thrown:
-    /// <c>ExportTakeoffCommand</c> surfaces this type as a blocking dialog, whereas
-    /// an exception crossing the Revit boundary reaches the user as a host fault
-    /// with no file named in it.
-    /// </para>
-    /// <para>
-    /// <see cref="ConfigError.Location"/> is left null on purpose. Nothing was
-    /// parsed, so there is no failing position; a default-constructed location would
-    /// report line 0, position 0 and send the estimator hunting a syntax error in a
-    /// file that is very likely valid. For the same reason the message blames this
-    /// version's capability, not the file's contents.
+    /// A file read without its path stops too: criteria in force from a file no
+    /// one can name are the silent fallback wearing a file.
     /// </para>
     /// </remarks>
-    private static ConfigError CannotHonourYet(string? path)
+    private static Result<EffectiveCriteria, ConfigError> FromFile(string text, string? path)
     {
-        string subject = path is null ? "A criteria file" : $"The criteria file '{path}'";
+        if (path is null)
+        {
+            return Result<EffectiveCriteria, ConfigError>.Err(new ConfigError(
+                "A criteria file was read, but not where from, so it cannot be named as the source of the criteria. The run stopped."));
+        }
 
-        return new ConfigError(
-            $"{subject} was supplied, but this version cannot read criteria files yet. "
-                + "The run stopped instead of continuing, because measuring under the "
-                + "built-in defaults would have discarded the criteria in that file "
-                + "without saying so. Remove the file to measure under the built-in "
-                + "defaults deliberately.")
+        Result<IReadOnlyList<LocatedOverride>, ConfigError> parsed = CriteriaFile.Parse(text);
+        if (!parsed.IsOk)
+        {
+            return Result<EffectiveCriteria, ConfigError>.Err(InFile(parsed.Error, parsed.Error.Location, path));
+        }
+
+        Result<CriteriaSet, ConfigError> merged = CriteriaSet.Merge(
+            CriteriaSet.Default,
+            [.. parsed.Value.Select(entry => entry.Override)]);
+        if (!merged.IsOk)
+        {
+            ConfigLocation? where = merged.Error.Location
+                ?? parsed.Value.LastOrDefault(entry => entry.Override.Category == merged.Error.Category)?.Location;
+            return Result<EffectiveCriteria, ConfigError>.Err(InFile(merged.Error, where, path));
+        }
+
+        return Result<EffectiveCriteria, ConfigError>.Ok(new EffectiveCriteria(merged.Value, ConfigSource.File, path));
+    }
+
+    /// <summary>The refusal as the estimator reads it: the file, the place in it, the category and the value.</summary>
+    private static ConfigError InFile(ConfigError error, ConfigLocation? where, string path)
+    {
+        string detail = error.Message;
+        if (error.Category is { } category && !detail.Contains($"'{category}'", StringComparison.Ordinal))
+        {
+            detail = $"In the entry for '{category}': {detail}";
+        }
+
+        if (error.InvalidValue is { } value && !detail.Contains(value, StringComparison.Ordinal))
+        {
+            detail += $" The value written is {value}.";
+        }
+
+        string place = where is null ? string.Empty : $", line {where.Line}, position {where.Position}";
+        return new ConfigError($"The criteria file '{path}'{place}: {detail}")
         {
             FilePath = path,
+            Location = where,
+            Category = error.Category,
+            InvalidValue = error.InvalidValue,
         };
     }
 }

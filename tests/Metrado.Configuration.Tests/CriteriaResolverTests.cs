@@ -111,51 +111,79 @@ public sealed class CriteriaResolverTests
         Assert.Same(fromLocator, resolved.Error);
     }
 
-    /// <summary>
-    /// I1 ships no parser: the "External, Versionable Criteria File" requirement is
-    /// tagged I2, and task 2.1 builds the reader. So a file that was read is an input
-    /// I1 cannot honour, and the specification leaves exactly one response — the
-    /// system "MUST NOT silently fall back to defaults when a file was supplied", so
-    /// the run stops.
-    /// </summary>
     [Fact]
-    public void AFileThatWasReadStopsTheRunBecauseThisIncrementCannotHonourItYet()
+    public void AFileThatWasReadIsInForceAndNamed()
     {
-        Result<EffectiveCriteria, ConfigError> resolved = CriteriaResolver.Resolve(
-            CriteriaFileLookup.Found("{ \"Walls\": { \"threshold\": 2.5 } }"),
-            CriteriaPath);
+        EffectiveCriteria criteria = Resolved("{ \"Walls\": { \"threshold\": 2.5, \"mode\": \"inclusive\" } }");
 
-        Assert.False(
-            resolved.IsOk,
-            "A criteria file was supplied and read, and resolution ignored it and "
-                + "returned criteria anyway. The estimator's thresholds would be absent "
-                + "from a budget that reports itself as exported successfully.");
+        Assert.Equal(ConfigSource.File, criteria.Source);
+        Assert.Equal(CriteriaPath, criteria.Path);
+        Assert.Equal(2.5, criteria.Criteria.ByCategory["Walls"].Threshold.Value);
+        Assert.Equal(BoundaryMode.Inclusive, criteria.Criteria.ByCategory["Walls"].Threshold.Mode);
+    }
+
+    /// <summary>A file that overrides nothing is still the source named, with every default kept.</summary>
+    [Fact]
+    public void AFileWithNoEntriesKeepsTheDefaultsButIsNamed()
+    {
+        EffectiveCriteria criteria = Resolved("{ }");
+
+        Assert.Equal(ConfigSource.File, criteria.Source);
+        Assert.Equal(CriteriaSet.Default.ByCategory["Walls"], criteria.Criteria.ByCategory["Walls"]);
     }
 
     /// <summary>
-    /// The refusal names the file, and deliberately claims no position inside it.
+    /// <c>takeoff-configuration</c>, "Malformed configuration file": the run stops
+    /// and "the error message identifies the file and the failing location".
     /// </summary>
-    /// <remarks>
-    /// Nothing was parsed, so there is no failing location. Reporting one — line 0,
-    /// position 0, the values a default-constructed location would carry — would send
-    /// the estimator to hunt a syntax error that does not exist in a file that is
-    /// probably perfectly valid.
-    /// </remarks>
     [Fact]
-    public void TheRefusalOfAReadFileNamesTheFileAndClaimsNoPositionInsideIt()
+    public void MalformedSyntaxStopsNamingTheFileAndTheLine()
     {
-        Result<EffectiveCriteria, ConfigError> resolved = CriteriaResolver.Resolve(
-            CriteriaFileLookup.Found("{ }"),
-            CriteriaPath);
+        ConfigError error = Stopped("{\n  \"Walls\": { \"threshold\": }\n}");
 
-        Assert.Equal(CriteriaPath, resolved.Error.FilePath);
-        Assert.Null(resolved.Error.Location);
+        Assert.Equal(CriteriaPath, error.FilePath);
+        Assert.Equal(2, error.Location?.Line);
+        Assert.StartsWith($"The criteria file '{CriteriaPath}', line 2, position ", error.Message);
+    }
+
+    /// <summary>"Unknown category in configuration": the run stops naming the category, at the line it is on.</summary>
+    [Fact]
+    public void AnUnknownCategoryStopsNamingItAndItsLine()
+    {
+        ConfigError error = Stopped("{\n  \"Wals\": { \"threshold\": 1 }\n}");
+
+        Assert.Equal("Wals", error.Category);
+        Assert.Equal(new ConfigLocation(2, 3), error.Location);
+        Assert.Contains("'Wals' is not a category", error.Message);
+        Assert.StartsWith($"The criteria file '{CriteriaPath}', line 2, position 3: ", error.Message);
+    }
+
+    /// <summary>"Negative threshold is rejected": the error names the category and the value.</summary>
+    [Fact]
+    public void ANegativeThresholdStopsNamingItsCategoryValueAndLine()
+    {
+        ConfigError error = Stopped("{ \"Walls\": { \"threshold\": -1 } }");
+
+        Assert.Equal("Walls", error.Category);
+        Assert.Equal("-1", error.InvalidValue);
+        Assert.Equal(new ConfigLocation(1, 3), error.Location);
+        Assert.Contains("'Walls'", error.Message);
+        Assert.Contains("-1", error.Message);
+    }
+
+    /// <summary>A category written twice is pointed at where it is written the second time.</summary>
+    [Fact]
+    public void ARepeatedCategoryPointsAtTheRepetition()
+    {
+        ConfigError error = Stopped("{\n  \"Walls\": {},\n  \"Walls\": { \"threshold\": 2 }\n}");
+
+        Assert.Equal(new ConfigLocation(3, 3), error.Location);
     }
 
     /// <summary>
     /// Triangulation on the same branch with the path absent: the run still stops.
-    /// A caller that read a file without retaining its name has still supplied a
-    /// configuration, and honouring it is still impossible.
+    /// A file read without its name cannot be named as the source of the criteria
+    /// in force, and criteria from an unnamed file are the silent fallback again.
     /// </summary>
     [Fact]
     public void AReadFileWithNoPathStillStopsTheRunEvenThoughItCannotBeNamed()
@@ -178,5 +206,19 @@ public sealed class CriteriaResolverTests
             () => CriteriaResolver.Resolve(null!, CriteriaPath));
 
         Assert.Equal("lookup", refused.ParamName);
+    }
+
+    private static EffectiveCriteria Resolved(string text)
+    {
+        Result<EffectiveCriteria, ConfigError> resolved = CriteriaResolver.Resolve(CriteriaFileLookup.Found(text), CriteriaPath);
+        Assert.True(resolved.IsOk, resolved.IsOk ? null : resolved.Error.Message);
+        return resolved.Value;
+    }
+
+    private static ConfigError Stopped(string text)
+    {
+        Result<EffectiveCriteria, ConfigError> resolved = CriteriaResolver.Resolve(CriteriaFileLookup.Found(text), CriteriaPath);
+        Assert.False(resolved.IsOk, "The file was honoured.");
+        return resolved.Error;
     }
 }
