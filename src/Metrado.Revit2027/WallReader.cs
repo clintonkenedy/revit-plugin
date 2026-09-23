@@ -129,6 +129,15 @@ public static class WallReader
         foreach (ElementId id in candidates)
         {
             Element insert = document.GetElement(id);
+
+            // A secondary design option is not the model being measured: its
+            // inserts deduct nothing from the primary wall, just as its walls
+            // are not read. Counting one as a cut would add back what was
+            // never removed.
+            if (insert.DesignOption is { IsPrimary: false })
+            {
+                continue;
+            }
             InsertKind kind = insert switch
             {
                 FamilyInstance => InsertKind.FamilyInstance,
