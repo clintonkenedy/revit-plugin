@@ -72,6 +72,18 @@ public sealed class SecondAndThirdLinkTests
         Assert.Equal("S-100", CodificationChain.Standard(sharedParameter: Nominated).Resolve(WithShared(Nominated, "S-100")));
     }
 
+    /// <summary>With a parameter nominated the order still starts at the Assembly Code: it wins over both later links.</summary>
+    [Fact]
+    public void WithANominatedParameterTheAssemblyCodeStillWins()
+    {
+        ElementTakeoff element = WithShared(Nominated, "S-100") with
+        {
+            Codes = new CodificationReadings(assemblyCode: "C1010", keynote: "M-030", new Dictionary<string, string?> { [Nominated] = "S-100" }),
+        };
+
+        Assert.Equal("C1010", CodificationChain.Standard(sharedParameter: Nominated).Resolve(element));
+    }
+
     /// <summary>No parameter nominated, no third link: a shared value is never read by accident.</summary>
     [Fact]
     public void WithNoNominatedParameterTheChainReadsNoSharedValue()
