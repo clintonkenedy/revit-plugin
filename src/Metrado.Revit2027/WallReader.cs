@@ -38,11 +38,22 @@ public static class WallReader
         Axis? axis = wall.Location is LocationCurve { Curve: Line line }
             ? new Axis(line.GetEndPoint(0), line.Direction)
             : null;
-        HashSet<ElementId> cuts = CutEvidence(wall);
+        Dictionary<ElementId, List<XYZ>> generators = FaceGenerators(wall);
+        HashSet<ElementId> cuts = [.. generators.Keys];
+        HashSet<ElementId> voids = [.. InstanceVoidCutUtils.GetCuttingVoidInstances(wall)];
+        List<ElementId> candidates = [.. wall.FindInserts(true, true, true, true).Union(voids)];
+
+        // Joined elements that are not inserts — floors, beams, columns —
+        // cut the wall too; where, is where the faces they generate lie.
+        List<Box> otherCuts = axis is null
+            ? []
+            : [.. generators
+                .Where(entry => !candidates.Contains(entry.Key) && document.GetElement(entry.Key) is not WallSweep)
+                .Select(entry => Extent(axis, entry.Value))];
 
         OpeningDecision openings = OpeningPolicy.Decide(
-            new WallFacts(axis is null ? Unknown : Extent(axis, SolidPoints(wall)), Conditions(document, wall, axis, cuts)),
-            Inserts(document, wall, axis, cuts));
+            new WallFacts(axis is null ? Unknown : Extent(axis, SolidPoints(wall)), Conditions(document, wall, axis, cuts), otherCuts),
+            Inserts(document, wall, axis, cuts, voids, candidates));
 
         return new WallReading(
             UniqueId: wall.UniqueId,
@@ -75,6 +86,11 @@ public static class WallReader
             conditions.Add("it is not straight");
         }
 
+        if (wall.CrossSection != WallCrossSection.Vertical)
+        {
+            conditions.Add("it is slanted or tapered");
+        }
+
         if (structure is not null
             && (structure.GetWallSweepsInfo(WallSweepType.Sweep).Count > 0 || structure.GetWallSweepsInfo(WallSweepType.Reveal).Count > 0))
         {
@@ -91,20 +107,26 @@ public static class WallReader
             conditions.Add("its profile is edited");
         }
 
-        // An attached top or base is deliberately not a condition. On the
-        // Pacific sample 68 of 71 outlines on attached walls matched Revit's
-        // deduction exactly, 2 fell short by 1e-4 m2, and the one that
-        // overstated (by 4.88 m2) reached 2.13 m beyond the wall solid, which
-        // the containment check already reports.
+        // Containment only compares ranges, so a wall whose elevation is not a
+        // rectangle — a top attached to a pitched roof, a base on a sloped
+        // floor — can hold an outline inside its range that crosses its real
+        // edge. Most outlines on attached walls were exact on the Pacific
+        // sample, but a gable would not be.
+        if (wall.get_Parameter(BuiltInParameter.WALL_TOP_IS_ATTACHED)?.AsInteger() == 1
+            || wall.get_Parameter(BuiltInParameter.WALL_BOTTOM_IS_ATTACHED)?.AsInteger() == 1)
+        {
+            conditions.Add("its top or base is attached, so its edge may not be straight");
+        }
+
         return conditions;
     }
 
-    private static List<InsertFacts> Inserts(Document document, Wall wall, Axis? axis, HashSet<ElementId> cuts)
+    private static List<InsertFacts> Inserts(
+        Document document, Wall wall, Axis? axis, HashSet<ElementId> cuts, HashSet<ElementId> voids, List<ElementId> candidates)
     {
-        HashSet<ElementId> voids = [.. InstanceVoidCutUtils.GetCuttingVoidInstances(wall)];
         List<InsertFacts> facts = [];
 
-        foreach (ElementId id in wall.FindInserts(true, true, true, true).Union(voids))
+        foreach (ElementId id in candidates)
         {
             Element insert = document.GetElement(id);
             InsertKind kind = insert switch
@@ -152,8 +174,10 @@ public static class WallReader
                             Extent(axis, loop.SelectMany(curve => curve.Tessellate())));
 
                 case Opening { IsRectBoundary: true } opening:
-                    XYZ a = opening.BoundaryRect[0], b = opening.BoundaryRect[1];
-                    return (new XYZ(b.X - a.X, b.Y - a.Y, 0).GetLength() * Math.Abs(b.Z - a.Z), null, Extent(axis, [a, b]));
+                    // Width along the wall, not the corners' plan distance,
+                    // which would add any offset across the wall's thickness.
+                    Box rect = Extent(axis, [opening.BoundaryRect[0], opening.BoundaryRect[1]]);
+                    return ((rect.UMax - rect.UMin) * (rect.ZMax - rect.ZMin), null, rect);
 
                 case Wall embedded:
                     return (null, null, Extent(axis, SolidPoints(embedded)) is { UMin: not double.NaN } extent ? extent : Bounds(axis, insert));
@@ -162,13 +186,48 @@ public static class WallReader
                     return (null, null, Bounds(axis, insert));
             }
         }
-        catch (RevitApplicationException ex) when (ex is not RevitModificationForbidden and not RevitModificationOutsideTransaction)
+        catch (RevitApplicationException ex) when (!IsWriteRefusal(ex))
         {
             // "Couldn't generate cut-out." for families without an opening
             // cut, among others. A write attempt is not caught: it must fail
             // the run, because the command promised to change nothing.
             return (null, ex.Message, Bounds(axis, insert));
         }
+    }
+
+    /// <summary>
+    /// A write attempted during a read-only command. Besides the two
+    /// modification exceptions, Revit refuses a transaction in a read-only
+    /// command with its base InvalidOperationException and this message.
+    /// </summary>
+    private static bool IsWriteRefusal(RevitApplicationException ex) =>
+        ex is RevitModificationForbidden or RevitModificationOutsideTransaction
+        || ex.Message.Contains("Cannot modify the document", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Every element that generated faces of this wall, with the points of
+    /// those faces: the inserts that actually cut it, and the joined elements
+    /// whose cuts are located by where their faces lie.
+    /// </summary>
+    private static Dictionary<ElementId, List<XYZ>> FaceGenerators(Wall wall)
+    {
+        Dictionary<ElementId, List<XYZ>> generators = [];
+        foreach (Face face in Solids(wall).SelectMany(solid => solid.Faces.Cast<Face>()))
+        {
+            List<XYZ>? points = null;
+            foreach (ElementId id in wall.GetGeneratingElementIds(face).Where(id => id != wall.Id))
+            {
+                points ??= [.. face.GetEdgesAsCurveLoops().SelectMany(loop => loop).SelectMany(curve => curve.Tessellate())];
+                if (!generators.TryGetValue(id, out List<XYZ>? known))
+                {
+                    generators[id] = known = [];
+                }
+
+                known.AddRange(points);
+            }
+        }
+
+        return generators;
     }
 
     /// <summary>The element's bounding box projected on the wall: coarse, but it contains the element's cut.</summary>
@@ -187,19 +246,6 @@ public static class WallReader
             from y in new[] { min.Y, max.Y }
             from z in new[] { min.Z, max.Z }
             select box.Transform.OfPoint(new XYZ(x, y, z)));
-    }
-
-    /// <summary>Ids of the elements that generated this wall's faces: the inserts that actually cut it.</summary>
-    private static HashSet<ElementId> CutEvidence(Wall wall)
-    {
-        HashSet<ElementId> ids = [];
-        foreach (Face face in Solids(wall).SelectMany(solid => solid.Faces.Cast<Face>()))
-        {
-            ids.UnionWith(wall.GetGeneratingElementIds(face));
-        }
-
-        ids.Remove(wall.Id);
-        return ids;
     }
 
     private static IEnumerable<Solid> Solids(Wall wall) =>

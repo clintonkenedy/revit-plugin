@@ -31,9 +31,15 @@ public sealed class ExportTakeoffCommand : IExternalCommand
             + $"{extraction.Warnings.Count} reported without a measure. "
             + "The export is not wired in this build yet, so no workbook was written.";
 
-        // The journal keeps what the dialog showed, so a run leaves evidence
-        // even when nobody reads the dialog.
+        // The journal keeps what the dialog showed, and why each opening was
+        // reported, so a run leaves evidence even when nobody reads the dialog.
         commandData.Application.Application.WriteJournalComment($"Metrado: {summary}", true);
+        foreach (IGrouping<string, string> reason in extraction.UnmeasuredReasons
+            .GroupBy(reason => reason)
+            .OrderByDescending(group => group.Count()))
+        {
+            commandData.Application.Application.WriteJournalComment($"Metrado: reported x{reason.Count()}: {reason.Key}", false);
+        }
         TaskDialog.Show("Metrado", summary);
         return Result.Succeeded;
     }
