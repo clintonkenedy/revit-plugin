@@ -240,6 +240,8 @@ public static class TakeoffWorkbook
             .Where(partida => !partida.IsUnclassified)
             .OrderBy(partida => partida.Key.Capitulo, StringComparer.Ordinal)
             .ThenBy(partida => partida.Key.PartidaCode, StringComparer.Ordinal)
+            // A partida split by unit: its blocks in the units' declared order.
+            .ThenBy(partida => partida.Unit)
             .GroupBy(partida => partida.Key.Capitulo, StringComparer.Ordinal);
 
     /// <summary>The measurement lines of a partida, in the order they are written.</summary>

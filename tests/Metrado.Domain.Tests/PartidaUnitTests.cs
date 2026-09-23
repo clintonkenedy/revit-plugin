@@ -28,10 +28,36 @@ public sealed class PartidaUnitTests
 
         ValidationWarning warning = Assert.Single(result.Warnings);
         Assert.Equal("w-3", warning.UniqueId);
-        Assert.Contains("C1010", warning.Condition);
-        Assert.Contains("m2", warning.Condition);
-        Assert.Contains("u", warning.Condition);
+        Assert.Contains("Partida C1010 in Walls has lines in m2 and in u.", warning.Condition);
         Assert.Contains("not added together", warning.Condition);
+    }
+
+    /// <summary>
+    /// Revit's iteration order decides nothing: the same lines in another order
+    /// give the same warning, naming the first element of the other unit by
+    /// UniqueId and the units in a fixed order.
+    /// </summary>
+    [Fact]
+    public void TheWarningDoesNotDependOnArrivalOrder()
+    {
+        Linea[] lines = [Line("w-1", 10.0, QuantityUnit.SquareMetre), Line("w-2", 1.0, QuantityUnit.Each), Line("w-3", 1.0, QuantityUnit.Each)];
+
+        ValidationWarning inOrder = Assert.Single(TakeoffResult.Group(lines).Warnings);
+        ValidationWarning reversed = Assert.Single(TakeoffResult.Group([.. lines.Reverse()]).Warnings);
+
+        Assert.Equal(inOrder, reversed);
+        Assert.Equal("w-2", inOrder.UniqueId);
+    }
+
+    /// <summary>Unclassified lines are not a partida; their split is said as it is.</summary>
+    [Fact]
+    public void UnclassifiedLinesInTwoUnitsAreNotCalledAPartida()
+    {
+        TakeoffResult result = TakeoffResult.Group(
+            [Line("w-1", 10.0, QuantityUnit.SquareMetre, UnclassifiedResolver.Code), Line("w-2", 1.0, QuantityUnit.Each, UnclassifiedResolver.Code)]);
+
+        ValidationWarning warning = Assert.Single(result.Warnings);
+        Assert.StartsWith("Unclassified lines in Walls come in m2 and in u.", warning.Condition);
     }
 
     /// <summary>The run's report carries the split's warning after the run's own, with no caller having to add it.</summary>
@@ -55,12 +81,12 @@ public sealed class PartidaUnitTests
         Assert.Empty(result.Warnings);
     }
 
-    private static Linea Line(string uniqueId, double value, QuantityUnit unit)
+    private static Linea Line(string uniqueId, double value, QuantityUnit unit, string code = "C1010")
     {
         Quantity quantity = new(value, unit);
         return new Linea(
             Wall(uniqueId),
-            "C1010",
+            code,
             new MetradoResult(quantity, quantity, quantity, BoundaryMode.Exclusive, 0, ClampedToGross: false));
     }
 }

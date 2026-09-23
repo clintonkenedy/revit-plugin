@@ -22,7 +22,8 @@ namespace Metrado.Domain;
 /// </param>
 /// <param name="Applied">
 /// The convention each capitulo was actually measured under, one entry per
-/// capitulo that produced at least one line.
+/// capitulo and unit that produced at least one line (a capitulo has one
+/// unit unless grouping split a partida by unit).
 /// </param>
 public sealed record RunReport(
     int ExportedLines,

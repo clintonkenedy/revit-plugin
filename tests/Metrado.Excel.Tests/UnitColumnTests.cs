@@ -55,6 +55,22 @@ public sealed class UnitColumnTests
         Assert.Equal(["m2", "u"], Rows(sheet, "PARTIDA").Select(row => Unit(sheet, row)));
     }
 
+    /// <summary>"Ordering MUST NOT depend on Revit's element iteration order", a split partida's blocks included.</summary>
+    [Fact]
+    public void ASplitPartidasRowsDoNotDependOnArrivalOrder()
+    {
+        Linea[] lines =
+        [
+            TakeoffFixture.Line("w-1", "C1010", metrado: 10),
+            TakeoffFixture.Line("w-2", "C1010", metrado: 1, unit: QuantityUnit.Each),
+        ];
+
+        using XLWorkbook inOrder = WrittenWorkbook.Of(TakeoffFixture.ResultOf(lines));
+        using XLWorkbook reversed = WrittenWorkbook.Of(TakeoffFixture.ResultOf([.. lines.Reverse()]));
+
+        Assert.Equal(WrittenWorkbook.Grid(inOrder.Worksheet(SheetName)), WrittenWorkbook.Grid(reversed.Worksheet(SheetName)));
+    }
+
     private static string Unit(IXLWorksheet sheet, int row) => Cell(sheet, row, "Unit").GetString();
 
     private static IXLCell Cell(IXLWorksheet sheet, int row, string header) =>

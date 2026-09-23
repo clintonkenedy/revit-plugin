@@ -79,9 +79,9 @@ public sealed record Partida
     /// so summing them would produce a number expressed in no unit at all and the
     /// workbook would print it under whichever unit happened to come first.
     /// <para>
-    /// I2's "Unit Reported per Partida" downgrades this to a validation warning so
-    /// the rest of the workbook still ships; until a warning can be carried out of
-    /// grouping, refusing is the only option that does not invent a total.
+    /// Grouping never hands a partida mixed units: it lists each unit's lines
+    /// as a partida of their own and raises a validation warning (I2, "Unit
+    /// Reported per Partida"), so this refusal only guards a direct caller.
     /// </para>
     /// </remarks>
     /// <exception cref="InvalidOperationException">The lines disagree on the unit.</exception>
