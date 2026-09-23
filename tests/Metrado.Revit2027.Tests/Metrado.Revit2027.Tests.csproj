@@ -74,6 +74,10 @@
     <Copy SourceFiles="@(_AddInDependencyManifest)" DestinationFolder="$(OutDir)AddIn">
       <Output TaskParameter="DestinationFiles" ItemName="FileWrites" />
     </Copy>
+    <!-- Published too, so the suite also runs from a publish folder. -->
+    <ItemGroup>
+      <ResolvedFileToPublish Include="@(_AddInDependencyManifest)" RelativePath="AddIn\%(Filename)%(Extension)" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
   </Target>
 
   <ItemGroup>
