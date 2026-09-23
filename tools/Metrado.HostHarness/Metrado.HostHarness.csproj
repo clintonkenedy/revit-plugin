@@ -17,10 +17,16 @@
   <ItemGroup>
     <PackageReference Include="Nice3point.Revit.Api.RevitAPI" Version="2027.2.0" ExcludeAssets="runtime" />
     <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="2027.2.0" ExcludeAssets="runtime" />
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPIIFC" Version="2027.2.0" ExcludeAssets="runtime" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="Metrado.HostHarness.addin" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- The probe judges Metrado's own WallReader against ground truth, not a copy of it. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Metrado.Revit2027\Metrado.Revit2027.csproj" />
   </ItemGroup>
 
 </Project>

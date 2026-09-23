@@ -5,8 +5,12 @@ using Autodesk.Revit.UI.Events;
 
 namespace Metrado.HostHarness;
 
-/// <summary>What one unattended run is asked to do. Read from the file METRADO_HARNESS names.</summary>
-public sealed record HarnessRequest(string CommandId, string ReportPath, int SettleIdlings = 5);
+/// <summary>
+/// What one unattended run is asked to do. Read from the file METRADO_HARNESS names.
+/// Mode "command" posts <see cref="CommandId"/>; mode "probe-walls" runs <see cref="WallProbe"/> instead.
+/// </summary>
+public sealed record HarnessRequest(
+    string CommandId, string ReportPath, int SettleIdlings = 5, string Mode = "command", int MaxWalls = 30);
 
 /// <summary>What one run observed. Rewritten after every step, so a run that hangs still leaves its trail.</summary>
 public sealed class HarnessReport
@@ -19,6 +23,7 @@ public sealed class HarnessReport
     public bool? ModifiedAfterCommand { get; set; }
     public bool CommandPosted { get; set; }
     public List<HarnessDialog> Dialogs { get; } = [];
+    public WallProbe.Result? Probe { get; set; }
     public string? Error { get; set; }
     public DateTime StartedUtc { get; set; } = DateTime.UtcNow;
     public DateTime? FinishedUtc { get; set; }
@@ -39,7 +44,11 @@ public sealed record HarnessDialog(string Kind, string DialogId, string? Message
 /// </summary>
 public sealed class HarnessApplication : IExternalApplication
 {
-    private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions Json = new()
+    {
+        WriteIndented = true,
+        NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals,
+    };
 
     private readonly HarnessReport _report = new();
     private HarnessRequest? _request;
@@ -87,6 +96,15 @@ public sealed class HarnessApplication : IExternalApplication
                 _report.DocumentTitle = document.Title;
                 _report.DocumentPath = document.PathName;
                 _report.ModifiedBeforeCommand = document.IsModified;
+
+                if (_request.Mode == "probe-walls")
+                {
+                    Write("probing");
+                    _report.Probe = WallProbe.Run(document, _request.MaxWalls);
+                    _report.ModifiedAfterCommand = document.IsModified;
+                    Finish(app, "done");
+                    return;
+                }
 
                 RevitCommandId command = RevitCommandId.LookupCommandId(_request.CommandId)
                     ?? throw new InvalidOperationException($"No command is registered as '{_request.CommandId}'.");

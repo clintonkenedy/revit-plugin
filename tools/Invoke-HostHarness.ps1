@@ -17,6 +17,8 @@ param(
     [Parameter(Mandatory)] [string] $Model,
     [string] $CommandId = 'CustomCtrl_%CustomCtrl_%Add-Ins%Metrado%ExportTakeoffCommand',
     [string] $ReportPath = (Join-Path ([IO.Path]::GetTempPath()) "metrado-harness-$([guid]::NewGuid()).json"),
+    [ValidateSet('command', 'probe-walls')] [string] $Mode = 'command',
+    [int] $MaxWalls = 30,
     [int] $TimeoutSeconds = 600,
     [string] $RevitExe = 'D:\autodesk\producto\Revit 2027\Revit.exe',
     [string] $AddinsRoot = (Join-Path $env:APPDATA 'Autodesk\Revit\Addins\2027')
@@ -69,7 +71,10 @@ if ($LASTEXITCODE -ne 0) { throw "Building the harness failed with exit code $LA
 
 try {
     Move-Item (Join-Path $folder 'Metrado.HostHarness.addin') $manifest -Force
-    @{ CommandId = $CommandId; ReportPath = $ReportPath; SettleIdlings = 5 } | ConvertTo-Json | Set-Content $request -Encoding utf8
+    # The harness carries Metrado's assemblies to judge them; Metrado's own
+    # manifest comes along with them and has no business in this folder.
+    Remove-Item (Join-Path $folder 'Metrado.addin') -ErrorAction SilentlyContinue
+    @{ CommandId = $CommandId; ReportPath = $ReportPath; SettleIdlings = 5; Mode = $Mode; MaxWalls = $MaxWalls } | ConvertTo-Json | Set-Content $request -Encoding utf8
     Remove-Item $ReportPath -ErrorAction SilentlyContinue
 
     $env:METRADO_HARNESS = $request
@@ -80,9 +85,11 @@ try {
     # loading it — before any add-in can answer. Only a prompt naming Metrado
     # or this harness is answered, and only with Load Once, which trusts
     # nothing beyond this session; any other prompt is left for a person.
+    # A busy Revit makes UI Automation queries time out; that means "no
+    # prompt showing now", never a reason to abandon the run.
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     while (-not $revit.HasExited -and (Get-Date) -lt $deadline) {
-        Confirm-OwnUnsignedAddIn
+        try { Confirm-OwnUnsignedAddIn } catch { Write-Verbose "Prompt check skipped: $($_.Exception.Message)" }
         Start-Sleep -Seconds 2
     }
 
@@ -93,10 +100,17 @@ try {
     }
 }
 finally {
+    # The manifest goes first and unconditionally: without it the harness
+    # never loads again, even if its folder is still held open.
     Remove-Item Env:METRADO_HARNESS -ErrorAction SilentlyContinue
     Remove-Item $manifest -Force -ErrorAction SilentlyContinue
-    Remove-Item $folder -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item $request -Force -ErrorAction SilentlyContinue
+    if ($revit -and -not $revit.HasExited) {
+        Write-Warning "Revit is still running; '$folder' stays until it exits. Without its manifest the harness is inert."
+    }
+    else {
+        Remove-Item $folder -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 if (-not (Test-Path $ReportPath)) { throw "The harness wrote no report to '$ReportPath'." }
