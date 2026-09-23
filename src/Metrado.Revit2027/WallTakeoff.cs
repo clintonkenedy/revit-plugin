@@ -18,7 +18,9 @@ public sealed record WallReading(
     string? AssemblyCode,
     double? ComputedAreaSquareFeet,
     IReadOnlyList<OpeningReading> Openings,
-    IReadOnlyList<UnmeasuredOpening> Unmeasured);
+    IReadOnlyList<UnmeasuredOpening> Unmeasured,
+    string? Keynote = null,
+    IReadOnlyDictionary<string, string?>? SharedParameters = null);
 
 /// <summary>One opening Revit subtracted from a wall, read on its own and never summed.</summary>
 public sealed record OpeningReading(string UniqueId, double AreaSquareFeet);
@@ -66,8 +68,8 @@ public static class WallTakeoff
             TypeKey: reading.TypeUniqueId,
             Codes: new CodificationReadings(
                 reading.AssemblyCode,
-                keynote: null,
-                sharedParameters: new Dictionary<string, string?>()),
+                reading.Keynote,
+                sharedParameters: reading.SharedParameters ?? new Dictionary<string, string?>()),
             // No quantity rather than zero: the domain then reports that no
             // source had a value, instead of pricing the wall at nothing.
             Quantities: reading.ComputedAreaSquareFeet is double area

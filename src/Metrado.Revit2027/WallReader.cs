@@ -17,8 +17,8 @@ namespace Metrado.Revit2027;
 /// </summary>
 public static class WallReader
 {
-    public static IReadOnlyList<WallReading> ReadAll(Document document) =>
-        [.. Walls(document).Select(wall => Read(document, wall))];
+    public static IReadOnlyList<WallReading> ReadAll(Document document, Guid? sharedParameter = null) =>
+        [.. Walls(document).Select(wall => Read(document, wall, sharedParameter))];
 
     /// <summary>
     /// Basic walls only, primary design option or none. Curtain and stacked
@@ -32,7 +32,7 @@ public static class WallReader
             .OfType<Wall>()
             .Where(wall => wall.WallType.Kind == WallKind.Basic && wall.DesignOption is not { IsPrimary: false });
 
-    public static WallReading Read(Document document, Wall wall)
+    public static WallReading Read(Document document, Wall wall, Guid? sharedParameter = null)
     {
         WallType type = wall.WallType;
         Axis? axis = wall.Location is LocationCurve { Curve: Line line }
@@ -68,7 +68,9 @@ public static class WallReader
                 ? area.AsDouble()
                 : null,
             Openings: openings.Measured,
-            Unmeasured: openings.Unmeasured);
+            Unmeasured: openings.Unmeasured,
+            Keynote: OtherElementReader.Text(type, BuiltInParameter.KEYNOTE_PARAM),
+            SharedParameters: OtherElementReader.Shared(wall, type, sharedParameter));
     }
 
     private sealed record Axis(XYZ Origin, XYZ Direction);

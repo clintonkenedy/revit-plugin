@@ -19,7 +19,8 @@ public static class ExtractionService
         public int OpeningsMeasured => Elements.Sum(element => element.Openings.Count);
     }
 
-    public static Extraction Extract(Document document)
+    /// <param name="sharedParameter">The nominated shared parameter's GUID, or null when none is nominated.</param>
+    public static Extraction Extract(Document document, Guid? sharedParameter = null)
     {
         ArgumentNullException.ThrowIfNull(document);
 
@@ -27,7 +28,7 @@ public static class ExtractionService
         List<ValidationWarning> warnings = [];
         List<string> reasons = [];
 
-        foreach (WallReading reading in WallReader.ReadAll(document))
+        foreach (WallReading reading in WallReader.ReadAll(document, sharedParameter))
         {
             ElementTakeoff takeoff = WallTakeoff.From(reading, SquareMetres);
             elements.Add(takeoff);
@@ -35,8 +36,15 @@ public static class ExtractionService
             reasons.AddRange(reading.Unmeasured.Select(opening => opening.Reason));
         }
 
+        // Railings, doors and windows: no openings, so nothing to warn about.
+        elements.AddRange(OtherElementReader.ReadAll(document, sharedParameter).Select(reading => ElementTakeoffs.From(reading, Metres)));
+
         return new Extraction(elements, warnings, reasons);
     }
+
+    /// <summary>Revit's own conversion from its internal feet; never a hand-written factor.</summary>
+    public static double Metres(double feet) =>
+        UnitUtils.ConvertFromInternalUnits(feet, UnitTypeId.Meters);
 
     /// <summary>Revit's own conversion from its internal square feet; never a hand-written factor.</summary>
     public static double SquareMetres(double squareFeet) =>
