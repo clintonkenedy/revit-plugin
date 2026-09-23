@@ -15,8 +15,8 @@ public sealed class SurfaceTopologyTests
         new(6, []),
     ];
 
-    private static readonly LoopFacts Outer = new(Face: 1, Outer: true, AreaSquareFeet: 1000.0, Across: [6]);
-    private static readonly LoopFacts ShaftHole = new(Face: 1, Outer: false, AreaSquareFeet: 4.8, Across: [2, 3, 4, 5]);
+    private static readonly LoopFacts Outer = new(Face: 1, Outer: true, AreaSquareFeet: 1000.0, Across: [6], Plan: Square(-20, -20, 40));
+    private static readonly LoopFacts ShaftHole = new(Face: 1, Outer: false, AreaSquareFeet: 4.8, Across: [2, 3, 4, 5], Plan: Square(0, 0, 4));
 
     [Fact]
     public void AHoleBelongsToTheCutsAcrossItsEdges()
@@ -39,14 +39,16 @@ public sealed class SurfaceTopologyTests
     }
 
     /// <summary>
-    /// A face's loops must reproduce its area: outer less holes. Where they
-    /// miss by more than a millionth, a loop's area is not the face's hole.
+    /// A face's loops must reproduce its area: outer less holes. A loop's
+    /// error does not grow with the face, so neither does the slack: where
+    /// they miss by more than a millionth of a square foot, a loop's area is
+    /// not the face's.
     /// </summary>
     [Theory]
     [InlineData(995.2, true)]
-    [InlineData(995.2009, true)]
-    [InlineData(995.2021, false)]
-    [InlineData(995.1979, false)]
+    [InlineData(995.2000005, true)]
+    [InlineData(995.200002, false)]
+    [InlineData(995.199998, false)]
     [InlineData(null, false)]
     public void AHoleIsTrustedOnlyWhereItsFacesLoopsAddUp(double? faceArea, bool addsUp)
     {
@@ -61,7 +63,7 @@ public sealed class SurfaceTopologyTests
     {
         (IReadOnlyList<HoleFacts> holes, _) = Assemble(
             [new(1, [], 995.2), .. Faces.Skip(1), new(11, [], 49.0)],
-            [Outer, ShaftHole, new LoopFacts(11, true, 50.0, []), new LoopFacts(11, false, 1.0, [])]);
+            [Outer, ShaftHole, new LoopFacts(11, true, 50.0, [], Square(100, 100, 7)), new LoopFacts(11, false, 1.0, [], Square(101, 101, 1))]);
 
         Assert.Equal([true, true], holes.Select(hole => hole.FaceAddsUp));
     }
@@ -92,13 +94,48 @@ public sealed class SurfaceTopologyTests
         Assert.Equal([new CutterFacts("shaft", CutterKind.Opening, BeyondItsHoles: false)], cutters);
     }
 
-    /// <summary>The upper face holding its hole may name the cut too: it is the hole's own face.</summary>
+    /// <summary>
+    /// A cut that names an upper face leaves one of its own facing up, a seat
+    /// over a through-hole, which Revit counts as area: its holes would sum
+    /// more than it removed. No opening named one on either sample.
+    /// </summary>
     [Fact]
-    public void TheFaceHoldingItsHoleIsWithinIt()
+    public void AnUpperFaceTheCutNamesIsBeyondItsHoles()
     {
         (_, IReadOnlyList<CutterFacts> cutters) = Assemble([new(1, ["shaft"]), .. Faces.Skip(1)], [Outer, ShaftHole]);
 
-        Assert.False(Assert.Single(cutters).BeyondItsHoles);
+        Assert.True(Assert.Single(cutters).BeyondItsHoles);
+    }
+
+    /// <summary>An outer loop inside a hole is an island of the host, which Revit did not remove.</summary>
+    [Fact]
+    public void AHoleWithAnOuterLoopInsideItHoldsAnIsland()
+    {
+        LoopFacts island = new(11, true, 1.0, [], Square(1, 1, 1));
+
+        (IReadOnlyList<HoleFacts> holes, _) = Assemble([.. Faces, new(11, [], 1.0)], [Outer, ShaftHole, island]);
+
+        Assert.True(Assert.Single(holes).HoldsIsland);
+    }
+
+    /// <summary>A hole whose outline could not be read cannot rule an island out.</summary>
+    [Fact]
+    public void AHoleOfUnknownOutlineIsTakenToHoldAnIsland()
+    {
+        (IReadOnlyList<HoleFacts> holes, _) = Assemble(Faces, [Outer, ShaftHole with { Plan = [(0, 0), (4, 0)] }]);
+
+        Assert.True(Assert.Single(holes).HoldsIsland);
+    }
+
+    /// <summary>The face's own boundary surrounds the hole, and an outer loop elsewhere is beside it: neither is an island.</summary>
+    [Fact]
+    public void AnOuterLoopAroundOrBesideTheHoleIsNoIsland()
+    {
+        LoopFacts beside = new(11, true, 1.0, [], Square(-10, 1, 1));
+
+        (IReadOnlyList<HoleFacts> holes, _) = Assemble([.. Faces, new(11, [], 1.0)], [Outer, ShaftHole, beside]);
+
+        Assert.False(Assert.Single(holes).HoldsIsland);
     }
 
     /// <summary>A notch at the edge, a face underneath: faces no hole of its own explains.</summary>
@@ -143,12 +180,12 @@ public sealed class SurfaceTopologyTests
     public void CutsKeepTheFacesOrderAndTheirKinds()
     {
         (_, IReadOnlyList<CutterFacts> cutters) = Assemble(
-            [new(1, ["column"]), new(2, ["shaft", "column"]), new(3, ["planter"])],
+            [new(1, ["column"]), new(2, ["shaft", "column"]), new(3, ["planter", "unknown"])],
             [],
             kinds: new Dictionary<string, CutterKind> { ["shaft"] = CutterKind.Opening, ["column"] = CutterKind.Joined, ["planter"] = CutterKind.HostedInsert });
 
         Assert.Equal(
-            [("column", CutterKind.Joined), ("shaft", CutterKind.Opening), ("planter", CutterKind.HostedInsert)],
+            [("column", CutterKind.Joined), ("shaft", CutterKind.Opening), ("planter", CutterKind.HostedInsert), ("unknown", CutterKind.Joined)],
             cutters.Select(cutter => (cutter.UniqueId, cutter.Kind)));
     }
 
@@ -165,6 +202,10 @@ public sealed class SurfaceTopologyTests
             [new CutterFacts("shaft", CutterKind.Opening, false), new CutterFacts("hidden", CutterKind.Opening, false)],
             cutters);
     }
+
+    /// <summary>A square in plan, corner first, counterclockwise.</summary>
+    private static (double X, double Y)[] Square(double x, double y, double side) =>
+        [(x, y), (x + side, y), (x + side, y + side), (x, y + side)];
 
     private static (IReadOnlyList<HoleFacts> Holes, IReadOnlyList<CutterFacts> Cutters) Assemble(
         IReadOnlyList<FaceFacts> faces,

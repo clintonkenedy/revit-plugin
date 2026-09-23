@@ -8,7 +8,8 @@ public sealed record FaceFacts(int Id, IReadOnlyList<string> Generators, double?
 /// <summary>One edge loop of an up-facing face.</summary>
 /// <param name="Outer">Counterclockwise about the face's normal: the face's outer boundary, not a hole.</param>
 /// <param name="Across">The faces across its edges.</param>
-public sealed record LoopFacts(int Face, bool Outer, double AreaSquareFeet, IReadOnlyList<int> Across);
+/// <param name="Plan">Its points in plan, in order along the loop: an up-facing face projects onto plan without folding.</param>
+public sealed record LoopFacts(int Face, bool Outer, double AreaSquareFeet, IReadOnlyList<int> Across, IReadOnlyList<(double X, double Y)> Plan);
 
 /// <summary>
 /// Turns the faces Revit reports for a floor or roof into the facts
@@ -41,7 +42,7 @@ public static class SurfaceTopology
             .GroupBy(loop => loop.Face)
             .Where(face => faces.FirstOrDefault(known => known.Id == face.Key)?.UpperAreaSquareFeet is double area
                 && Math.Abs(face.Sum(loop => loop.Outer ? loop.AreaSquareFeet : -loop.AreaSquareFeet) - area)
-                    <= SurfaceOpeningPolicy.RelativeTolerance * Math.Abs(area))
+                    <= SurfaceOpeningPolicy.AreaTolerance)
             .Select(face => face.Key)];
 
         // A face across the hole that no other element generated is the
@@ -51,14 +52,15 @@ public static class SurfaceTopology
                 loop.AreaSquareFeet,
                 [.. loop.Across.SelectMany(id => generators.GetValueOrDefault(id) ?? []).Distinct()],
                 loop.Across.Any(id => generators.GetValueOrDefault(id) is not { Count: > 0 }),
-                addsUp.Contains(loop.Face)),
-            new HashSet<int>([loop.Face, .. loop.Across])))];
+                addsUp.Contains(loop.Face),
+                HoldsIsland(loop, loops)),
+            new HashSet<int>(loop.Across)))];
 
         List<string> cutting = [.. faces.SelectMany(face => face.Generators).Distinct()];
         List<CutterFacts> cutters = [.. cutting.Select(name =>
         {
-            // Its holes' faces, and the upper faces holding them, are the only
-            // faces a cut that stays within its holes can name.
+            // Its holes' sides are the only faces a cut that stays within its
+            // holes can name: an upper face it names is a seat of its own.
             HashSet<int> within = [.. holes.Where(hole => hole.Hole.Generators.Contains(name)).SelectMany(hole => hole.Faces)];
             return new CutterFacts(
                 name,
@@ -71,5 +73,31 @@ public static class SurfaceTopology
             .Select(name => new CutterFacts(name, CutterKind.Opening, BeyondItsHoles: false)));
 
         return ([.. holes.Select(hole => hole.Hole)], cutters);
+    }
+
+    /// <summary>
+    /// Whether an outer loop of any up-facing face lies inside the hole in
+    /// plan: an island of the host, which Revit did not remove. A hole whose
+    /// outline is not known is taken to hold one.
+    /// </summary>
+    private static bool HoldsIsland(LoopFacts hole, IReadOnlyList<LoopFacts> loops) =>
+        hole.Plan.Count < 3
+        || loops.Any(other => other.Outer && other.Plan.Count > 0 && Inside(hole.Plan, other.Plan[0]));
+
+    /// <summary>Even-odd ray casting: whether the point lies inside the polygon.</summary>
+    private static bool Inside(IReadOnlyList<(double X, double Y)> polygon, (double X, double Y) point)
+    {
+        bool inside = false;
+        for (int i = 0, j = polygon.Count - 1; i < polygon.Count; j = i++)
+        {
+            (double X, double Y) a = polygon[i], b = polygon[j];
+            if ((a.Y > point.Y) != (b.Y > point.Y)
+                && point.X < a.X + (point.Y - a.Y) / (b.Y - a.Y) * (b.X - a.X))
+            {
+                inside = !inside;
+            }
+        }
+
+        return inside;
     }
 }

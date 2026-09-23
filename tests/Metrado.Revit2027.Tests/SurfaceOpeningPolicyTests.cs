@@ -65,9 +65,11 @@ public sealed class SurfaceOpeningPolicyTests
 
     public static TheoryData<string, SurfaceFacts, string> Untrustworthy() => new()
     {
-        // On the Snowdon sample, shafts across a floor's edge removed up to 7 m2 and left no hole.
+        // On the Snowdon sample, shafts across a floor's edge removed up to 7.7 m2 and left no hole.
         { "an edge notch", Slab(), "no hole in the upper faces is its own" },
-        { "a cut beyond its hole", Slab(Hole(4.8, "shaft")), "beyond its holes" },
+        { "a cut beyond its hole", Slab(Hole(4.8, "shaft")), "beyond the sides of its holes" },
+        // An island of the floor inside the hole is floor Revit did not remove.
+        { "a hole holding an island", Slab(Hole(4.8, "shaft") with { HoldsIsland = true }), "island" },
         { "a hole shared with a joined element", Slab(Hole(4.8, "shaft", "column")), "shared" },
         { "a hole with no area", Slab(Hole(0.0, "shaft")), "no area" },
         { "a hole of unknown area", Slab(Hole(double.NaN, "shaft")), "no area" },
@@ -121,6 +123,45 @@ public sealed class SurfaceOpeningPolicyTests
 
         Assert.Equal([new OpeningReading("floor/hole-1", 0.5)], decision.Measured);
         Assert.Equal("shaft", Assert.Single(decision.Unmeasured).UniqueId);
+    }
+
+    /// <summary>One untrusted hole spoils the opening, wherever it sits among its holes.</summary>
+    [Fact]
+    public void OneHoleOnAFaceThatMissesItsAreaSpoilsTheOpening()
+    {
+        OpeningDecision decision = Decide(Slab(Hole(4.8, "shaft"), Hole(1.0, "shaft") with { FaceAddsUp = false }), Cutter("shaft"));
+
+        Assert.Empty(decision.Measured);
+        Assert.Contains("do not add up to that face", Assert.Single(decision.Unmeasured).Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ACutBeyondSeveralHolesIsReported()
+    {
+        OpeningDecision decision = Decide(Slab(Hole(0.4, "shaft"), Hole(0.4, "shaft")), Cutter("shaft") with { BeyondItsHoles = true });
+
+        Assert.Empty(decision.Measured);
+        Assert.Contains("beyond the sides of its holes", Assert.Single(decision.Unmeasured).Reason, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(double.NaN)]
+    public void AnOwnHoleWithNoAreaIsReported(double area)
+    {
+        OpeningDecision decision = Decide(Slab(Hole(area)));
+
+        Assert.Empty(decision.Measured);
+        Assert.Contains("no area", Assert.Single(decision.Unmeasured).Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnOwnHoleHoldingAnIslandIsReported()
+    {
+        OpeningDecision decision = Decide(Slab(Hole(0.5) with { HoldsIsland = true }));
+
+        Assert.Empty(decision.Measured);
+        Assert.Contains("island", Assert.Single(decision.Unmeasured).Reason, StringComparison.Ordinal);
     }
 
     /// <summary>Two openings whose cuts merge into one hole: Revit deducts their union once.</summary>
@@ -188,15 +229,15 @@ public sealed class SurfaceOpeningPolicyTests
     }
 
     /// <summary>
-    /// Faces and parameter agree to floating-point noise only: on the Snowdon
-    /// sample, 4e-6 m2 at most. Under a millionth of the area is noise;
-    /// two millionths is not.
+    /// Faces and parameter agree to floating-point noise only, whatever the
+    /// floor's size: on both samples, 7e-8 ft2 at most. Half a millionth of a
+    /// square foot is noise; two millionths is not.
     /// </summary>
     [Theory]
-    [InlineData(1000.0009, true)]
-    [InlineData(999.9991, true)]
-    [InlineData(1000.002, false)]
-    [InlineData(999.998, false)]
+    [InlineData(1000.0000005, true)]
+    [InlineData(999.9999995, true)]
+    [InlineData(1000.000002, false)]
+    [InlineData(999.999998, false)]
     public void TheFacesMustMatchTheComputedAreaToNoiseOnly(double upperFaces, bool measured)
     {
         OpeningDecision decision = Decide(Slab(Hole(4.8, "shaft")) with { UpperFacesSquareFeet = upperFaces }, Cutter("shaft"));

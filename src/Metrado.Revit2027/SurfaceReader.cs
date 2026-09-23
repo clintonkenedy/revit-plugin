@@ -88,12 +88,19 @@ public static class SurfaceReader
             foreach (EdgeArray edges in face.EdgeLoops.Cast<EdgeArray>())
             {
                 (bool outer, double area) = Loop(face, edges);
-                loops.Add(new LoopFacts(face.Id, outer, area, [.. edges.Cast<Edge>()
-                    .SelectMany(edge => new[] { edge.GetFace(0), edge.GetFace(1) })
-                    .OfType<Face>()
-                    .Select(neighbour => neighbour.Id)
-                    .Where(id => id != face.Id)
-                    .Distinct()]));
+                loops.Add(new LoopFacts(
+                    face.Id,
+                    outer,
+                    area,
+                    [.. edges.Cast<Edge>()
+                        .SelectMany(edge => new[] { edge.GetFace(0), edge.GetFace(1) })
+                        .OfType<Face>()
+                        .Select(neighbour => neighbour.Id)
+                        .Where(id => id != face.Id)
+                        .Distinct()],
+                    [.. edges.Cast<Edge>()
+                        .SelectMany(edge => edge.AsCurveFollowingFace(face).Tessellate())
+                        .Select(point => (point.X, point.Y))]));
             }
         }
 
