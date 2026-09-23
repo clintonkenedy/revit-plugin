@@ -77,12 +77,16 @@ public static class SurfaceTopology
 
     /// <summary>
     /// Whether an outer loop of any up-facing face lies inside the hole in
-    /// plan: an island of the host, which Revit did not remove. A hole whose
-    /// outline is not known is taken to hold one.
+    /// plan: an island of the host, which Revit did not remove. A loop Revit
+    /// could not read may be an island's boundary, and a hole whose outline is
+    /// not known cannot rule one out: both count.
     /// </summary>
     private static bool HoldsIsland(LoopFacts hole, IReadOnlyList<LoopFacts> loops) =>
         hole.Plan.Count < 3
-        || loops.Any(other => other.Outer && other.Plan.Count > 0 && Inside(hole.Plan, other.Plan[0]));
+        || loops.Any(other => !ReferenceEquals(other, hole)
+            && (other.Outer || double.IsNaN(other.AreaSquareFeet))
+            && other.Plan.Count > 0
+            && Inside(hole.Plan, other.Plan[0]));
 
     /// <summary>Even-odd ray casting: whether the point lies inside the polygon.</summary>
     private static bool Inside(IReadOnlyList<(double X, double Y)> polygon, (double X, double Y) point)

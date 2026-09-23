@@ -118,6 +118,48 @@ public sealed class SurfaceTopologyTests
         Assert.True(Assert.Single(holes).HoldsIsland);
     }
 
+    /// <summary>Revit merges a host's coplanar pieces into one face, so an island is often a second outer loop of the hole's own face.</summary>
+    [Fact]
+    public void AnIslandOnTheHolesOwnFaceIsSeen()
+    {
+        LoopFacts island = new(1, true, 1.0, [], Square(1, 1, 1));
+
+        (IReadOnlyList<HoleFacts> holes, _) = Assemble(Faces, [Outer, ShaftHole, island]);
+
+        Assert.True(Assert.Single(holes, hole => hole.AreaSquareFeet == 4.8).HoldsIsland);
+    }
+
+    /// <summary>A loop Revit could not read may be an island's boundary: inside a hole, it is taken as one.</summary>
+    [Fact]
+    public void AnUnreadableLoopInsideAHoleIsTakenAsAnIsland()
+    {
+        LoopFacts unreadable = new(11, false, double.NaN, [], Square(1, 1, 1));
+
+        (IReadOnlyList<HoleFacts> holes, _) = Assemble([.. Faces, new(11, [], 1.0)], [Outer, ShaftHole, unreadable]);
+
+        Assert.True(Assert.Single(holes, hole => hole.AreaSquareFeet == 4.8).HoldsIsland);
+    }
+
+    /// <summary>An unreadable hole with nothing inside it holds no island: it is not its own.</summary>
+    [Fact]
+    public void AnUnreadableHoleIsNotItsOwnIsland()
+    {
+        (IReadOnlyList<HoleFacts> holes, _) = Assemble(Faces, [Outer, ShaftHole with { AreaSquareFeet = double.NaN }]);
+
+        Assert.False(Assert.Single(holes).HoldsIsland);
+    }
+
+    /// <summary>A readable hole beside another hole is no island of it.</summary>
+    [Fact]
+    public void AReadableHoleInsideAnotherIsNoIsland()
+    {
+        LoopFacts inner = new(11, false, 1.0, [], Square(1, 1, 1));
+
+        (IReadOnlyList<HoleFacts> holes, _) = Assemble([.. Faces, new(11, [], 1.0)], [Outer, ShaftHole, inner]);
+
+        Assert.False(Assert.Single(holes, hole => hole.AreaSquareFeet == 4.8).HoldsIsland);
+    }
+
     /// <summary>A hole whose outline could not be read cannot rule an island out.</summary>
     [Fact]
     public void AHoleOfUnknownOutlineIsTakenToHoldAnIsland()
@@ -165,8 +207,8 @@ public sealed class SurfaceTopologyTests
 
         Assert.Equal([false, true], cutters.Select(cutter => cutter.BeyondItsHoles));
 
-        // The upper face holding the shaft's hole explains the shaft naming
-        // it, not a sleeve that notches that face with no hole of its own.
+        // A sleeve naming the upper face, a notch or a seat of its own,
+        // reaches beyond, whatever other cuts' holes that face holds.
         (_, cutters) = Assemble(
             [new(1, ["sleeve"]), .. Faces.Skip(1)],
             [Outer, ShaftHole],

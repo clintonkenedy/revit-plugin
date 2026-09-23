@@ -48,9 +48,12 @@ public sealed record SurfaceFacts(string UniqueId, double? ComputedSquareFeet, d
 public static class SurfaceOpeningPolicy
 {
     /// <summary>
-    /// Floating-point noise only, in square feet: the largest seen on both
-    /// samples was 7e-8 ft2. An area's error does not grow with the floor, so
-    /// neither does the slack.
+    /// A millionth of a square foot, fixed: an area's error does not grow with
+    /// the floor, so neither does the slack. The upper faces met the computed
+    /// area to 7e-8 ft2 on both samples. A face's loops met its area less
+    /// closely, up to 2e-4 ft2 on faces with no hole at all, where the face's
+    /// own area strays from loops that match the sketch; a hole on such a face
+    /// is reported, erring toward the deduction.
     /// </summary>
     internal const double AreaTolerance = 1e-6;
 
