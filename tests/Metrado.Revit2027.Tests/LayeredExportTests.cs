@@ -89,6 +89,86 @@ public sealed class LayeredExportTests
         Assert.EndsWith("(Ladrillo 0.078 m3).", kept.Condition, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A layer its type gives no material of its own is measured as the
+    /// category's: said once for the type, naming the layer, so the estimator
+    /// assigns it a material rather than price it as the category's.
+    /// </summary>
+    [Fact]
+    public void ALayerMeasuredAsTheCategorysMaterialIsNotedOncePerType()
+    {
+        ElementTakeoff first = CategoryMaterial(Wall());
+        ElementTakeoff second = CategoryMaterial(Wall()) with { UniqueId = "w-2" };
+        ElementTakeoff other = CategoryMaterial(Wall()) with { UniqueId = "w-3", TypeKey = "t-2", TypeName = "Tiled brick, thick" };
+
+        TakeoffExport.Outcome outcome = TakeoffExport.Run(Layered(), [first, second, other], []);
+
+        Assert.Equal(9, outcome.Result.LineCount);
+        Assert.Equal(
+            [
+                ("w-1", "Its type gives layer 1 (Structure, 130 mm) no material of its own, so it is measured as the category's material, Ladrillo. Assign it one in the type, so it is coded and priced as what it is. Said once for the type."),
+                ("w-3", "Its type gives layer 1 (Structure, 130 mm) no material of its own, so it is measured as the category's material, Ladrillo. Assign it one in the type, so it is coded and priced as what it is. Said once for the type."),
+            ],
+            outcome.Report.Warnings.Select(warning => (warning.UniqueId, warning.Condition)));
+    }
+
+    /// <summary>
+    /// Two such layers, as on Snowdon's Alley wall: the category's one
+    /// material on both faces, named once, its layers in the type's order.
+    /// </summary>
+    [Fact]
+    public void TwoLayersMeasuredAsTheCategorysMaterialAreNamedTogether()
+    {
+        MaterialRef category = new("default", "Default Wall");
+        MaterialRef brick = new("brick", "Ladrillo");
+        ElementTakeoff wall = Wall() with
+        {
+            Quantities =
+            [
+                new RawQuantity("HOST_AREA_COMPUTED", new Quantity(12.51, QuantityUnit.SquareMetre)),
+                new RawQuantity(LayerSources.HostVolume, new Quantity(1.93905, QuantityUnit.CubicMetre)),
+                new RawQuantity(LayerSources.MaterialVolume, new Quantity(0.31275, QuantityUnit.CubicMetre), category),
+                new RawQuantity(LayerSources.MaterialArea, new Quantity(25.02, QuantityUnit.SquareMetre), category),
+                new RawQuantity(LayerSources.MaterialVolume, new Quantity(1.62630, QuantityUnit.CubicMetre), brick),
+                new RawQuantity(LayerSources.MaterialArea, new Quantity(12.51, QuantityUnit.SquareMetre), brick),
+            ],
+            Layers = new LayerStructure(
+                [
+                    new CompoundLayer(0, LayerFunction.Finish1, new Quantity(0.010, QuantityUnit.Metre), "default", materialFromCategory: true),
+                    new CompoundLayer(1, LayerFunction.Structure, new Quantity(0.130, QuantityUnit.Metre), "brick"),
+                    new CompoundLayer(2, LayerFunction.Finish2, new Quantity(0.015, QuantityUnit.Metre), "default", materialFromCategory: true),
+                ],
+                []),
+        };
+
+        TakeoffExport.Outcome outcome = TakeoffExport.Run(Layered(), [wall], []);
+
+        Assert.Equal(2, outcome.Result.LineCount);
+        Assert.Equal(
+            "Its type gives layer 0 (Finish1, 10 mm), layer 2 (Finish2, 15 mm) no material of its own, so they are measured as the category's material, Default Wall. "
+            + "Assign each one in the type, so each is coded and priced as what it is. Said once for the type.",
+            Assert.Single(outcome.Report.Warnings).Condition);
+    }
+
+    /// <summary>A wall measured whole says nothing of its layers' materials: none of its lines is one.</summary>
+    [Fact]
+    public void AWallMeasuredWholeGetsNoCategoryMaterialNote()
+    {
+        TakeoffExport.Outcome outcome = TakeoffExport.Run(Layered(), [CategoryMaterial(Wall(wholeVolumeOver: 0.01))], []);
+
+        Assert.DoesNotContain(outcome.Report.Warnings, warning => warning.Condition.Contains("category's material", StringComparison.Ordinal));
+    }
+
+    private static ElementTakeoff CategoryMaterial(ElementTakeoff wall) =>
+        wall with
+        {
+            Layers = new LayerStructure(
+                [.. wall.Layers!.Layers.Select(layer => layer.Function == LayerFunction.Structure
+                    ? new CompoundLayer(layer.Position, layer.Function, layer.Width, layer.MaterialId, materialFromCategory: true)
+                    : layer)],
+                wall.Layers.Conditions),
+        };
+
     private static EffectiveCriteria Defaults() => CriteriaResolver.Resolve(CriteriaFileLookup.Absent, path: null).Value;
 
     private static EffectiveCriteria Layered(IReadOnlyDictionary<LayerFunction, QuantityUnit>? units = null) =>

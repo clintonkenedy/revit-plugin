@@ -38,6 +38,7 @@ public static class TakeoffExport
         CodificationChain chain = CodificationChain.Standard(sharedParameter: null);
         List<Linea> lineas = [];
         List<ValidationWarning> warnings = [.. extractionWarnings];
+        HashSet<string> notedTypes = new(StringComparer.Ordinal);
 
         foreach (ElementTakeoff element in elements)
         {
@@ -52,7 +53,7 @@ public static class TakeoffExport
             // A category taken off by layer: its materials' lines, unless they
             // do not account for all of it, when it is measured whole below,
             // under its own code, its reason already reported.
-            if (criterion.Layers is not null && ByLayer(element, criterion, chain, lineas, warnings))
+            if (criterion.Layers is not null && ByLayer(element, criterion, chain, lineas, warnings, notedTypes))
             {
                 continue;
             }
@@ -88,7 +89,8 @@ public static class TakeoffExport
         CategoryCriterion criterion,
         CodificationChain chain,
         List<Linea> lineas,
-        List<ValidationWarning> warnings)
+        List<ValidationWarning> warnings,
+        HashSet<string> notedTypes)
     {
         IReadOnlyList<LayerLine>? lines = LayerMeasurement.Measure(element, criterion).Match<IReadOnlyList<LayerLine>?>(
             byLayer: (measured, raised) =>
@@ -108,9 +110,46 @@ public static class TakeoffExport
 
         lineas.AddRange(lines.Select(line => new Linea(element, chain.ResolveLayer(element, line.Layer.Material), line.Metrado, line.Layer)));
 
+        // Every element of a type has its layers, so the note is said once for the type.
+        if (CategoryMaterialNote(element, lines) is ValidationWarning note && notedTypes.Add(element.TypeKey))
+        {
+            warnings.Add(note);
+        }
+
         // Each opening was decided once, at the host's threshold, so it is flagged once.
         warnings.AddRange(NearThreshold(element, criterion.Threshold));
         return true;
+    }
+
+    /// <summary>
+    /// A layer its type gives no material of its own is measured as the
+    /// category's material, which then codes and prices it as that. Null when
+    /// every layer has its own.
+    /// </summary>
+    private static ValidationWarning? CategoryMaterialNote(ElementTakeoff element, IReadOnlyList<LayerLine> lines)
+    {
+        List<(CompoundLayer Layer, string Material)> borrowed =
+        [
+            .. lines
+                .SelectMany(line => line.Layer.Layers.Where(layer => layer.MaterialFromCategory).Select(layer => (layer, line.Layer.Material.MaterialName)))
+                .OrderBy(entry => entry.layer.Position),
+        ];
+        if (borrowed.Count == 0)
+        {
+            return null;
+        }
+
+        return ValidationWarning.ForElement(
+            element,
+            string.Format(
+                CultureInfo.InvariantCulture,
+                "Its type gives {0} no material of its own, so {1} measured as the category's material, {2}. "
+                    + "Assign {3} one in the type, so {4} coded and priced as what it is. Said once for the type.",
+                string.Join(", ", borrowed.Select(entry => string.Format(CultureInfo.InvariantCulture, "layer {0} ({1}, {2:0.###} mm)", entry.Layer.Position, entry.Layer.Function, entry.Layer.Width.Value * 1000))),
+                borrowed.Count == 1 ? "it is" : "they are",
+                string.Join(", ", borrowed.Select(entry => entry.Material).Distinct(StringComparer.Ordinal)),
+                borrowed.Count == 1 ? "it" : "each",
+                borrowed.Count == 1 ? "it is" : "each is"));
     }
 
     private static IEnumerable<ValidationWarning> NearThreshold(ElementTakeoff element, OpeningsThreshold threshold) =>
