@@ -15,7 +15,8 @@ context: |
 
 strict_tdd: true
 strict_tdd_reason: >
-  Three xUnit test projects now exist (Domain, Configuration, Excel) and
+  xUnit test projects exist (Domain, Configuration, Excel, Integration,
+  and the Windows-only Revit2027) and
   the workspace test command `dotnet test Metrado.CrossPlatform.slnf`
   runs green on this macOS ARM64 host, so the no-runner fallback no
   longer applies. Scope: the cross-platform projects, where the rules
@@ -25,7 +26,8 @@ strict_tdd_reason: >
   behaviour stays outside strict TDD because the Revit API cannot be
   mocked (sealed types, non-constructible Document) and no in-process
   runner is confirmed for Revit 2027 / .NET 10; that layer is covered by
-  SmokeCommand and journal evidence on the Windows host.
+  Revit journal evidence on the Windows host and, from task 1.25, by
+  SmokeCommand.
 
 projects:
   - path: "src/Metrado.Domain"

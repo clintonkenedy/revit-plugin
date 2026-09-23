@@ -194,7 +194,7 @@ The chain is an ordered `IReadOnlyList<ICodeResolver>` ending in `UnclassifiedRe
 | Unit | macOS | Defaults with no file, per-field inheritance, single-category override, loader rejections (malformed, unknown category, negative threshold, invalid mode) |
 | Integration | macOS | `EffectiveCriteria` → measurement → `TakeoffResult` + `RunReport` → workbook |
 | Golden | macOS | Deterministic ordering, subtotal reconciliation, unclassified block, applied-mode cell, empty workbook |
-| Host smoke | Windows/Revit | Isolated load, 8-assembly closure by name, `ASSEMBLY_CODE` under Spanish UI, opening enumeration, document unmodified, completion dialog |
+| Host smoke | Windows/Revit | Isolated load, 11-assembly closure by name (8 third-party + 3 Metrado), `ASSEMBLY_CODE` under Spanish UI, opening enumeration, document unmodified, completion dialog |
 
 ## Threat Matrix
 
@@ -202,7 +202,7 @@ The chain is an ordered `IReadOnlyList<ICodeResolver>` ending in `UnclassifiedRe
 
 ## Migration / Rollout
 
-No data migration; the add-in never writes to the document. Each increment ships as its own PR; rollback is deleting the `.addin`. If `UseRevitContext=False` misbehaves, fall back to bare `DocumentFormat.OpenXml`, shrinking the closure from **8 assemblies to 3** (`DocumentFormat.OpenXml`, `.Framework`, `System.IO.Packaging`) under the same inclusive count.
+No data migration; the add-in never writes to the document. Each increment ships as its own PR; rollback is deleting the `.addin`. If `UseRevitContext=False` misbehaves, fall back to bare `DocumentFormat.OpenXml`, shrinking the third-party closure from **8 assemblies to 3** (`DocumentFormat.OpenXml`, `.Framework`, `System.IO.Packaging`) under the same inclusive count — so the startup check's 11 become 6 with Metrado's own three.
 
 `openspec/config.yaml` — **recommended, not applied by this phase**: register the seven projects; set `apply.test_command` and `verify.test_command` to `dotnet test Metrado.CrossPlatform.slnf`; set the single `verify.build_command` to `dotnet build Metrado.CrossPlatform.slnf` — the only build that runs on both hosts, since the field holds one string; the Windows-only `dotnet build Metrado.slnx` belongs in tasks. Close the settled `open_questions` (Revit version, Excel library, test framework); re-evaluate `strict_tdd` to `true` once test projects exist.
 
