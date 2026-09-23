@@ -10,18 +10,33 @@ public sealed class SmokeChecksTests
     private const string Folder = @"C:\Users\ana\AppData\Roaming\Autodesk\Revit\Addins\2027\Metrado";
 
     [Fact]
-    public void AnAddInLoadedInAContextOfItsOwnIsIsolated()
+    public void AnAddInAloneInAContextOfItsOwnIsIsolated()
     {
-        SmokeCheck check = SmokeChecks.Isolation(contextName: "Metrado.Revit2027", isDefaultContext: false);
+        SmokeCheck check = SmokeChecks.Isolation(contextName: "METRADO.REVIT2027", isDefaultContext: false, foreign: []);
 
         Assert.Equal(SmokeStatus.Pass, check.Status);
-        Assert.Contains("Metrado.Revit2027", check.Detail);
+        Assert.Contains("'METRADO.REVIT2027'", check.Detail);
     }
 
     [Fact]
     public void AnAddInLoadedInTheDefaultContextIsNotIsolated()
     {
-        Assert.Equal(SmokeStatus.Fail, SmokeChecks.Isolation(contextName: "Default", isDefaultContext: true).Status);
+        Assert.Equal(SmokeStatus.Fail, SmokeChecks.Isolation(contextName: "Default", isDefaultContext: true, foreign: []).Status);
+    }
+
+    /// <summary>
+    /// Revit merges add-ins that declare the same context name into one context
+    /// without a word. An assembly in it from another folder is the sign.
+    /// </summary>
+    [Fact]
+    public void AContextSharedWithAnotherAddInIsNotIsolatedAndTheIntruderIsNamed()
+    {
+        const string Intruder = @"C:\Users\ana\AppData\Roaming\Autodesk\Revit\Addins\2027\Other\Other.dll";
+
+        SmokeCheck check = SmokeChecks.Isolation(contextName: "METRADO.REVIT2027", isDefaultContext: false, foreign: [Intruder]);
+
+        Assert.Equal(SmokeStatus.Fail, check.Status);
+        Assert.Contains(Intruder, check.Detail);
     }
 
     [Fact]
@@ -66,9 +81,9 @@ public sealed class SmokeChecksTests
     /// its built-in identity, the code comes back all the same.
     /// </summary>
     [Fact]
-    public void ACodeReadByItsBuiltInParameterIsRecordedWithTheNameTheUIShows()
+    public void ACodeReadByExtractionIsRecordedWithTheNameTheUIShows()
     {
-        SmokeCheck check = SmokeChecks.AssemblyCode("Spanish", "Código de montaje", "Muro básico: Genérico - 200 mm", "B2010");
+        SmokeCheck check = SmokeChecks.AssemblyCode("Spanish", "Código de montaje", codedTypes: 1, "Muro básico: Genérico - 200 mm", "B2010");
 
         Assert.Equal(SmokeStatus.Pass, check.Status);
         Assert.Contains("Spanish", check.Detail);
@@ -79,7 +94,21 @@ public sealed class SmokeChecksTests
     [Fact]
     public void AModelWithNoCodedTypeSkipsTheCodeCheck()
     {
-        Assert.Equal(SmokeStatus.Skip, SmokeChecks.AssemblyCode("Spanish", "Código de montaje", typeName: null, code: null).Status);
+        Assert.Equal(SmokeStatus.Skip, SmokeChecks.AssemblyCode("Spanish", "Código de montaje", codedTypes: 0, typeName: null, code: null).Status);
+    }
+
+    /// <summary>
+    /// The wall types say they carry codes and extraction read none: the
+    /// reading broke (a name the UI translates, a wrong parameter), which is
+    /// what the check is for, and it must not pass as "nothing to check".
+    /// </summary>
+    [Fact]
+    public void CodedWallTypesThatExtractionReadsNothingFromFail()
+    {
+        SmokeCheck check = SmokeChecks.AssemblyCode("Spanish", "Código de montaje", codedTypes: 3, typeName: null, code: null);
+
+        Assert.Equal(SmokeStatus.Fail, check.Status);
+        Assert.Contains("3 wall types", check.Detail);
     }
 
     [Fact]
@@ -98,7 +127,7 @@ public sealed class SmokeChecksTests
         SmokeCheck check = SmokeChecks.Openings("wall-1", inserts: ["door", "window-1", "window-2"], reported: ["door", "window-1"]);
 
         Assert.Equal(SmokeStatus.Fail, check.Status);
-        Assert.Contains("window-2", check.Detail);
+        Assert.Contains("missing window-2", check.Detail);
     }
 
     [Fact]

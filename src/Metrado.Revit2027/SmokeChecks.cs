@@ -20,11 +20,26 @@ public sealed record SmokeCheck(string Name, SmokeStatus Status, string Detail);
 /// </summary>
 public static class SmokeChecks
 {
-    /// <summary>The add-in runs in a load context of its own, never Revit's default one (D3).</summary>
-    public static SmokeCheck Isolation(string? contextName, bool isDefaultContext) =>
-        new("isolation",
-            isDefaultContext ? SmokeStatus.Fail : SmokeStatus.Pass,
-            $"Metrado.Revit2027 is loaded in context '{contextName}'{(isDefaultContext ? ", Revit's default one" : string.Empty)}.");
+    /// <summary>
+    /// The add-in runs in a load context of its own (D3): not Revit's default
+    /// one, and not one it shares. Revit merges add-ins that declare the same
+    /// context name into one context without a word; an assembly in it from
+    /// outside the add-in's folder is the sign.
+    /// </summary>
+    /// <param name="foreign">The locations of assemblies in the context that come from outside the add-in's folder.</param>
+    public static SmokeCheck Isolation(string? contextName, bool isDefaultContext, IReadOnlyCollection<string> foreign)
+    {
+        ArgumentNullException.ThrowIfNull(foreign);
+
+        if (isDefaultContext)
+        {
+            return new("isolation", SmokeStatus.Fail, $"Metrado.Revit2027 is loaded in context '{contextName}', Revit's default one.");
+        }
+
+        return foreign.Count == 0
+            ? new("isolation", SmokeStatus.Pass, $"Metrado.Revit2027 is loaded in context '{contextName}', which holds nothing from outside its folder.")
+            : new("isolation", SmokeStatus.Fail, $"Context '{contextName}' is shared: it also holds {string.Join(", ", foreign)}.");
+    }
 
     /// <summary>
     /// Every required assembly resolves, from the add-in's own folder. Revit
@@ -61,18 +76,34 @@ public static class SmokeChecks
     /// </summary>
     /// <param name="language">The UI language Revit is running in.</param>
     /// <param name="shownAs">The parameter's name as the UI shows it.</param>
-    /// <param name="typeName">The first wall type carrying a code; null when none does.</param>
-    public static SmokeCheck AssemblyCode(string language, string? shownAs, string? typeName, string? code) =>
-        typeName is null || string.IsNullOrWhiteSpace(code)
-            ? new("assembly-code", SmokeStatus.Skip, $"No wall type in this model carries an assembly code (UI language {language}, parameter shown as '{shownAs}').")
-            : new("assembly-code", SmokeStatus.Pass, $"Read '{code}' from '{typeName}' by its built-in parameter; the {language} UI shows the parameter as '{shownAs}'.");
+    /// <param name="codedTypes">
+    /// How many types of the walls extraction reads carry a code, counted
+    /// apart from extraction: the fact a broken reading cannot hide.
+    /// </param>
+    /// <param name="typeName">The first wall type extraction read a code from; null when it read none.</param>
+    public static SmokeCheck AssemblyCode(string language, string? shownAs, int codedTypes, string? typeName, string? code)
+    {
+        bool read = typeName is not null && !string.IsNullOrWhiteSpace(code);
+        if (read)
+        {
+            return new("assembly-code", SmokeStatus.Pass, $"Extraction read '{code}' from '{typeName}'; the {language} UI shows the parameter as '{shownAs}'.");
+        }
+
+        return codedTypes == 0
+            ? new("assembly-code", SmokeStatus.Skip, $"No type of the walls extraction reads carries an assembly code (UI language {language}, parameter shown as '{shownAs}').")
+            : new("assembly-code", SmokeStatus.Fail, $"{codedTypes} wall types carry an assembly code, and extraction read none (UI language {language}, parameter shown as '{shownAs}').");
+    }
 
     /// <summary>
     /// Every opening cutting the wall is reported on its own, measured or
     /// not: a reading that merged two windows would still carry a total.
     /// </summary>
     /// <param name="wallUniqueId">A wall with one door and two windows; null when the model has none.</param>
-    /// <param name="inserts">The UniqueIds of the doors and windows the wall hosts.</param>
+    /// <param name="inserts">
+    /// The UniqueIds of the door and two windows that cut the wall, as Revit's
+    /// own geometry shows (each generates faces of the wall). A hosted insert
+    /// that cuts nothing is no opening, and extraction rightly leaves it out.
+    /// </param>
     /// <param name="reported">The UniqueIds the reading reported, measured or unmeasured.</param>
     public static SmokeCheck Openings(string? wallUniqueId, IReadOnlyCollection<string> inserts, IReadOnlyCollection<string> reported)
     {

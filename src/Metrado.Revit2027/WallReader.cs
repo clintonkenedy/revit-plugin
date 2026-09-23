@@ -218,7 +218,7 @@ public static class WallReader
     /// those faces: the inserts that actually cut it, and the joined elements
     /// whose cuts are located by where their faces lie.
     /// </summary>
-    private static Dictionary<ElementId, List<XYZ>> FaceGenerators(Wall wall)
+    internal static Dictionary<ElementId, List<XYZ>> FaceGenerators(Wall wall)
     {
         Dictionary<ElementId, List<XYZ>> generators = [];
         foreach (Face face in Solids(wall).SelectMany(solid => solid.Faces.Cast<Face>()))

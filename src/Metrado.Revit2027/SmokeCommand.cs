@@ -35,7 +35,7 @@ public sealed class SmokeCommand : IExternalCommand
 
         List<SmokeCheck> checks =
         [
-            SmokeChecks.Isolation(context?.Name, context is null || context == AssemblyLoadContext.Default),
+            SmokeChecks.Isolation(context?.Name, context is null || context == AssemblyLoadContext.Default, Foreign(context)),
             Closure(context),
             AssemblyCode(application, document),
             Openings(document),
@@ -85,21 +85,50 @@ public sealed class SmokeCommand : IExternalCommand
         return SmokeChecks.Closure(folder, resolved);
     }
 
-    /// <summary>The code as extraction reads it, beside the name the running UI gives its parameter.</summary>
+    /// <summary>
+    /// Assemblies the add-in's context holds from outside the add-in's folder:
+    /// what another add-in declaring the same context name brings into it.
+    /// </summary>
+    private static List<string> Foreign(AssemblyLoadContext? context)
+    {
+        string folder = Path.GetDirectoryName(typeof(SmokeCommand).Assembly.Location)!;
+        return context is null
+            ? []
+            : [.. context.Assemblies
+                .Where(assembly => !assembly.IsDynamic && assembly.Location.Length > 0)
+                .Select(assembly => assembly.Location)
+                .Where(location => !string.Equals(Path.GetDirectoryName(location), folder, StringComparison.OrdinalIgnoreCase))];
+    }
+
+    /// <summary>
+    /// The code as extraction reads it, beside the name the running UI gives
+    /// its parameter, and how many of the read walls' types carry a code,
+    /// counted apart from extraction, so a broken reading fails the check.
+    /// </summary>
     private static SmokeCheck AssemblyCode(Autodesk.Revit.ApplicationServices.Application application, Document document)
     {
-        WallReading? coded = WallReader.Walls(document)
+        List<Wall> walls = [.. WallReader.Walls(document)];
+        int codedTypes = walls
+            .Select(wall => wall.WallType)
+            .DistinctBy(type => type.UniqueId)
+            .Count(type => !string.IsNullOrWhiteSpace(type.get_Parameter(BuiltInParameter.ASSEMBLY_CODE)?.AsString()));
+        WallReading? coded = walls
             .Select(wall => WallReader.Read(document, wall))
             .FirstOrDefault(reading => !string.IsNullOrWhiteSpace(reading.AssemblyCode));
 
         return SmokeChecks.AssemblyCode(
             application.Language.ToString(),
             LabelUtils.GetLabelFor(BuiltInParameter.ASSEMBLY_CODE),
+            codedTypes,
             coded?.TypeName,
             coded?.AssemblyCode);
     }
 
-    /// <summary>The first wall hosting exactly one door and two windows, and what extraction reports for it.</summary>
+    /// <summary>
+    /// The first wall that one door and two windows cut, and what extraction
+    /// reports for it. A hosted insert that generates none of the wall's faces
+    /// cut nothing, so a wall with one is passed over rather than failed.
+    /// </summary>
     private static SmokeCheck Openings(Document document)
     {
         foreach (Wall wall in WallReader.Walls(document))
@@ -108,6 +137,12 @@ public sealed class SmokeCommand : IExternalCommand
             int doors = inserts.Count(insert => insert.Category?.BuiltInCategory == BuiltInCategory.OST_Doors);
             int windows = inserts.Count(insert => insert.Category?.BuiltInCategory == BuiltInCategory.OST_Windows);
             if (inserts.Count != 3 || doors != 1 || windows != 2)
+            {
+                continue;
+            }
+
+            Dictionary<ElementId, List<XYZ>> cutters = WallReader.FaceGenerators(wall);
+            if (!inserts.All(insert => cutters.ContainsKey(insert.Id)))
             {
                 continue;
             }
