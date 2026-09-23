@@ -29,6 +29,18 @@ public sealed class CodificationChain
     /// </param>
     public CodificationChain(IReadOnlyList<ICodeResolver> links) => _links = links;
 
+    /// <summary>
+    /// The chain in the specification's fixed order: Assembly Code, Keynote,
+    /// the nominated shared parameter, unclassified. The rule link (I4) is an
+    /// absent entry; so is the shared-parameter link when no parameter is
+    /// nominated, so no shared value is ever read by accident.
+    /// </summary>
+    /// <param name="sharedParameter">The nominated shared parameter's name, or null when none is nominated.</param>
+    public static CodificationChain Standard(string? sharedParameter) =>
+        new(sharedParameter is null
+            ? [new AssemblyCodeResolver(), new KeynoteResolver(), new UnclassifiedResolver()]
+            : [new AssemblyCodeResolver(), new KeynoteResolver(), new SharedParameterResolver(sharedParameter), new UnclassifiedResolver()]);
+
     /// <summary>The code the first resolving link produced for the element.</summary>
     /// <remarks>
     /// Blank answers are declined here rather than trusted to each link. The Assembly

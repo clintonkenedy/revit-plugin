@@ -63,7 +63,7 @@ internal static class ExportPipeline
     /// </param>
     internal static ExportRun Run(EffectiveCriteria criteria, IReadOnlyList<ElementTakeoff> model)
     {
-        CodificationChain chain = new([new AssemblyCodeResolver(), new UnclassifiedResolver()]);
+        CodificationChain chain = CodificationChain.Standard(sharedParameter: null);
 
         List<Linea> lineas = [];
         List<ValidationWarning> warnings = [];

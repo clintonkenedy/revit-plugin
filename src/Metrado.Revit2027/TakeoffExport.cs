@@ -34,7 +34,8 @@ public static class TakeoffExport
         ArgumentNullException.ThrowIfNull(elements);
         ArgumentNullException.ThrowIfNull(extractionWarnings);
 
-        CodificationChain chain = new([new AssemblyCodeResolver(), new UnclassifiedResolver()]);
+        // No shared parameter can be nominated yet; the chain reads Assembly Code, then Keynote.
+        CodificationChain chain = CodificationChain.Standard(sharedParameter: null);
         List<Linea> lineas = [];
         List<ValidationWarning> warnings = [.. extractionWarnings];
 

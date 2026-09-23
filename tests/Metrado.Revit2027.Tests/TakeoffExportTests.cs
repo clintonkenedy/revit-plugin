@@ -42,6 +42,20 @@ public sealed class TakeoffExportTests
         Assert.Contains(outcome.Report.Warnings, warning => warning.UniqueId == "unreadable");
     }
 
+    /// <summary>The command's chain reads the Keynote when the Assembly Code is empty (task 2.4).</summary>
+    [Fact]
+    public void AWallWithNoAssemblyCodeIsCodedByItsKeynote()
+    {
+        ElementTakeoff wall = Wall("w1", "", area: 18.0) with
+        {
+            Codes = new CodificationReadings(assemblyCode: "", keynote: "M-030", sharedParameters: new Dictionary<string, string?>()),
+        };
+
+        TakeoffExport.Outcome outcome = TakeoffExport.Run(Defaults(), [wall], []);
+
+        Assert.Equal("M-030", Assert.Single(outcome.Result.Partidas).Key.PartidaCode);
+    }
+
     /// <summary>N1 as the command runs it: doors are counted into their partida, with no "no source" warning.</summary>
     [Fact]
     public void DoorsAreCountedIntoTheirPartida()
