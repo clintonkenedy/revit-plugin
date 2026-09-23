@@ -67,6 +67,18 @@ Railings are measured in linear metres because that is how a metrado states them
 
 `unit` is one of the unit symbols (`m2`, `m3`, `u`, `m`); `sources` is the ordered list of quantity sources, where an empty list is a choice and never "left out" (it declares a counted category once N1 lands, task 2.3); `threshold` is a number in the category's unit; `mode` is exactly `exclusive` or `inclusive`. Nothing in the file is ignored: an unknown or repeated field, a value of the wrong kind and text after the closing brace are refused, because a misspelt `"treshold"` read as nothing would leave its category on the default without a word. `CriteriaFile` refuses what the file's shape shows; `CriteriaSet.Merge` refuses what only the product's criteria can judge (an unsupported or repeated category, a negative threshold). Either way the run stops as "The criteria file '<path>', line N, position M: ...", naming the category and the value; lines and positions count from 1, positions in characters as an editor shows them. Comments may go wherever whitespace between values may, but not between a name and its colon, where the JSON reader refuses them. A `\u` escape for half of a surrogate pair is refused like any other entry, at its place.
 
+**Saved configurations (task 3.6, PR 35).** A saved configuration is a criteria file in the same shape with one reserved entry, which no category can be named:
+
+```jsonc
+{
+  "$configuration": { "name": "Obra Los Olivos", "sharedParameter": "4f46423f-5c26-11d4-9217-0000863f27ad" },
+  "Walls": { "unit": "m2", "sources": ["HOST_AREA_COMPUTED"], "threshold": 1, "mode": "exclusive", "layers": { "Structure": "m3", ... } },
+  ...
+}
+```
+
+The header's `name` is required; `sharedParameter` is the GUID of the shared parameter the codification chain reads third, or null, which settles where the estimator nominates it. The writer states every field of every category, layers as all seven functions or `false`, so what a file reproduces never depends on the built-in criteria it is read over. Reading goes through the criteria file's parser and merge, with the same located refusals, and a configuration read back equals the one written; run over an unchanged model, it reproduces every metrado bit for bit. A criteria file beside the model refuses the header until the command can pick a configuration (task 3.7): there its name and shared parameter would be read and ignored.
+
 ## Opening Measurement (decided in PR 16, on host evidence)
 
 **The constraint.** The rule compares each opening's own quantity, so the adapter must say how much area Revit subtracted for each insert. No read-only Revit API returns that (Autodesk KB, Dec 2025: "Currently it is not possible to extract the opening areas of a calculated area from walls in Revit"). The exact method — delete the insert, regenerate, read, roll back — needs a transaction, which `TransactionMode.ReadOnly` forbids. Every measured opening is therefore an **outline standing in for the deduction**.
