@@ -31,15 +31,14 @@ public static class CompletionReport
 
         // The budget sheet's first row, "Measurement lines exported", counts
         // the coded lines. The same phrase here means the same number, and
-        // the unclassified elements are named apart, so one label never
-        // carries two values.
+        // the unclassified ones are named apart, so one label never carries
+        // two values.
         int coded = report.ExportedLines - report.UnclassifiedCount;
         summary.AppendLine(report.NoMeasurableElements
             ? "No measurable elements were found. The workbook states zero measurement lines."
             : string.Create(
                 CultureInfo.InvariantCulture,
-                $"{coded} measurement {(coded == 1 ? "line" : "lines")} exported to the budget sheet; "
-                + $"{report.UnclassifiedCount} {(report.UnclassifiedCount == 1 ? "element" : "elements")} listed as unclassified."));
+                $"{coded} measurement {(coded == 1 ? "line" : "lines")} exported to the budget sheet; {Unclassified(report)} listed as unclassified."));
         summary.AppendLine();
 
         summary.AppendLine(criteria.Source == ConfigSource.File
@@ -69,6 +68,20 @@ public static class CompletionReport
             report.WarningCount == 0 ? null : summary + Environment.NewLine + Environment.NewLine + details + Environment.NewLine);
     }
 
+    /// <summary>
+    /// The unclassified lines, and the elements they belong to where those are
+    /// fewer: a layered element lists a line per uncoded material.
+    /// </summary>
+    private static string Unclassified(RunReport report)
+    {
+        int lines = report.UnclassifiedCount;
+        int elements = report.UnclassifiedElements;
+        string ofElements = string.Create(CultureInfo.InvariantCulture, $"{elements} {(elements == 1 ? "element" : "elements")}");
+        return lines == elements
+            ? ofElements
+            : string.Create(CultureInfo.InvariantCulture, $"{lines} lines of {ofElements}");
+    }
+
     private static string Describe(CategoryCriterion criterion)
     {
         string unit = criterion.Unit.Symbol();
@@ -89,6 +102,26 @@ public static class CompletionReport
             _ => throw new ArgumentOutOfRangeException(nameof(criterion), criterion.Threshold.Mode, "Not a declared boundary mode."),
         };
 
-        return $"  {criterion.Category}: measured in {unit} from {string.Join(", ", criterion.Sources)}; {rule}.";
+        string whole = $"measured in {unit} from {string.Join(", ", criterion.Sources)}";
+        if (criterion.Layers is not LayerCriterion layers)
+        {
+            return $"  {criterion.Category}: {whole}; {rule}.";
+        }
+
+        List<LayerFunction> cubic = [.. Enum.GetValues<LayerFunction>().Where(function => layers.UnitOf(function) == QuantityUnit.CubicMetre)];
+        string units = cubic.Count == 0 ? "every function in m2" : $"every function in m2 except {Joined(cubic)} in m3";
+
+        // With every opening deducted there is nothing to give back.
+        string share = criterion.Threshold is { Value: 0, Mode: BoundaryMode.Exclusive }
+            ? string.Empty
+            : ", each m2 line getting each one's area back once per layer it covers unless a warning says otherwise"
+                + (cubic.Count == 0 ? string.Empty : ", and each m3 line keeping Revit's deduction");
+        return $"  {criterion.Category}: by material layer, one line per material, {units}; {rule}{share}; "
+            + $"an element whose layers do not account for it is measured whole, in {unit} from {string.Join(", ", criterion.Sources)}.";
     }
+
+    private static string Joined(List<LayerFunction> functions) =>
+        functions.Count == 1
+            ? functions[0].ToString()
+            : $"{string.Join(", ", functions.Take(functions.Count - 1))} and {functions[^1]}";
 }

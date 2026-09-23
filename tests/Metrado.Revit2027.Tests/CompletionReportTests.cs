@@ -29,8 +29,7 @@ public sealed class CompletionReportTests
     {
         string summary = CompletionReport.For(Report(lines: 4, unclassified: 1), Defaults(), Workbook).Summary;
 
-        Assert.Contains("3 measurement lines exported to the budget sheet", summary);
-        Assert.Contains("1 element listed as unclassified", summary);
+        Assert.Contains("3 measurement lines exported to the budget sheet; 1 element listed as unclassified.", summary);
         Assert.DoesNotContain("4 measurement lines", summary);
     }
 
@@ -49,6 +48,17 @@ public sealed class CompletionReportTests
         Assert.Contains("0 measurement lines exported to the budget sheet", summary);
         Assert.Contains("104 elements listed as unclassified", summary);
         Assert.DoesNotContain("No measurable elements", summary);
+    }
+
+    /// <summary>A layered element puts a line per material on the Unclassified sheet: lines and elements are counted apart.</summary>
+    [Theory]
+    [InlineData(5, 2, "5 lines of 2 elements listed as unclassified")]
+    [InlineData(3, 1, "3 lines of 1 element listed as unclassified")]
+    public void UnclassifiedLinesOfFewerElementsAreCountedApart(int unclassified, int elements, string wording)
+    {
+        string summary = CompletionReport.For(Report(lines: 10, unclassified: unclassified, elements: elements), Defaults(), Workbook).Summary;
+
+        Assert.Contains($"{10 - unclassified} measurement lines exported to the budget sheet; {wording}.", summary);
     }
 
     [Fact]
@@ -120,6 +130,47 @@ public sealed class CompletionReportTests
         Assert.DoesNotContain("smaller than 0", summary);
     }
 
+    /// <summary>A category taken off by layer says so, how each function is measured, and how an element that cannot be is.</summary>
+    [Fact]
+    public void ALayeredCriterionSaysHowItIsTakenOff()
+    {
+        string summary = CompletionReport.For(Report(lines: 1, unclassified: 0), Layered("Walls", LayerFunction.Structure, LayerFunction.Substrate), Workbook).Summary;
+
+        Assert.Contains(
+            "  Walls: by material layer, one line per material, every function in m2 except Structure and Substrate in m3; "
+            + "openings smaller than 1 m2 are not deducted (exclusive), each m2 line getting each one's area back once per layer it covers unless a warning says otherwise, "
+            + "and each m3 line keeping Revit's deduction; an element whose layers do not account for it is measured whole, in m2 from HOST_AREA_COMPUTED.",
+            summary);
+    }
+
+    /// <summary>With every function in m2 no line keeps a deduction by volume; with every opening deducted there is nothing to give back.</summary>
+    [Fact]
+    public void ALayeredCriterionSaysOnlyWhatApplies()
+    {
+        EffectiveCriteria criteria = new(
+            CriteriaSet.Merge(CriteriaSet.Default, [new CategoryOverride("Floors", threshold: 0, layers: LayerOverride.On(new Dictionary<LayerFunction, QuantityUnit>()))]).Value,
+            ConfigSource.File,
+            @"C:\Projects\Office\metrado.criteria.json");
+
+        string summary = CompletionReport.For(Report(lines: 1, unclassified: 0), criteria, Workbook).Summary;
+
+        Assert.Contains("  Floors: by material layer, one line per material, every function in m2; every opening is deducted; an element whose layers", summary);
+        Assert.DoesNotContain("m3 line", summary);
+    }
+
+    /// <summary>With every function in m2, openings are given back and no line keeps a deduction by volume.</summary>
+    [Fact]
+    public void ALayeredCriterionInSquareMetresNamesNoM3Line()
+    {
+        string summary = CompletionReport.For(Report(lines: 1, unclassified: 0), Layered("Roofs"), Workbook).Summary;
+
+        Assert.Contains(
+            "  Roofs: by material layer, one line per material, every function in m2; openings smaller than 1 m2 are not deducted (exclusive), "
+            + "each m2 line getting each one's area back once per layer it covers unless a warning says otherwise; an element whose layers",
+            summary);
+        Assert.DoesNotContain("m3 line", summary);
+    }
+
     /// <summary>A counted category reads no source and applies no openings rule; the dialog says it is counted.</summary>
     [Fact]
     public void ACountedCategoryIsDescribedAsCounted()
@@ -181,7 +232,16 @@ public sealed class CompletionReportTests
 
     private static EffectiveCriteria Defaults() => new(CriteriaSet.Default, ConfigSource.BuiltInDefaults, path: null);
 
-    private static RunReport Report(int lines, int unclassified, IReadOnlyList<string>? warnings = null) =>
+    private static EffectiveCriteria Layered(string category, params LayerFunction[] cubic) =>
+        new(
+            CriteriaSet.Merge(CriteriaSet.Default, [new CategoryOverride(category, layers: LayerOverride.On(cubic.ToDictionary(function => function, _ => QuantityUnit.CubicMetre)))]).Value,
+            ConfigSource.File,
+            @"C:\Projects\Office\metrado.criteria.json");
+
+    private static RunReport Report(int lines, int unclassified, IReadOnlyList<string>? warnings = null, int? elements = null) =>
         new(lines, unclassified, [],
-            [.. (warnings ?? []).Select((condition, index) => new ValidationWarning($"element-{index + 1}", "Walls", "Basic Wall", "Generic", condition))]);
+            [.. (warnings ?? []).Select((condition, index) => new ValidationWarning($"element-{index + 1}", "Walls", "Basic Wall", "Generic", condition))])
+        {
+            UnclassifiedElements = elements ?? unclassified,
+        };
 }
