@@ -53,7 +53,7 @@ Absence is never an error; a supplied file is never ignored:
 | Doors | u | none (counted, N1) | 0 u | exclusive |
 | Windows | u | none (counted, N1) | 0 u | exclusive |
 
-Railings are measured in linear metres because that is how a metrado states them ("ml"), so the closed set of units gained the metre, written `m`. The specifications fix no unit for railings; a file can still set another. Doors and windows read no quantity source: the empty list is N1's counted category, and until task 2.3 they are reported as having no source rather than counted. Where no opening is ever added back the threshold is zero. The sources for floors, roofs and railings are the parameters' built-in names; that each yields the expected value in a real model is task 2.6's host evidence, not this table's.
+Railings are measured in linear metres because that is how a metrado states them ("ml"), so the closed set of units gained the metre, written `m`. The specifications fix no unit for railings; a file can still set another. Doors and windows read no quantity source: the empty list is N1's counted category (task 2.3), measured as one instance each, in `u`, decided before any source is looked for. A category with no source in any other unit is refused, since a count is in units. Where no opening is ever added back the threshold is zero. The sources for floors, roofs and railings are the parameters' built-in names; that each yields the expected value in a real model is task 2.6's host evidence, not this table's.
 
 **The criteria file's shape (task 2.1, PR 19).** One JSON object, comments and trailing commas allowed, with one entry per category keyed by the category's name; every field is optional and a field left out inherits the built-in criterion's:
 
