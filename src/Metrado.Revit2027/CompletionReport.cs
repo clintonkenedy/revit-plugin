@@ -73,10 +73,11 @@ public static class CompletionReport
     {
         string unit = criterion.Unit.Symbol();
         string threshold = criterion.Threshold.Value.ToString(CultureInfo.InvariantCulture);
-        string rule = criterion.Threshold.Mode switch
+        string rule = criterion.Threshold switch
         {
-            BoundaryMode.Exclusive => $"openings smaller than {threshold} {unit} are not deducted (exclusive)",
-            BoundaryMode.Inclusive => $"openings up to {threshold} {unit} are not deducted (inclusive)",
+            { Value: 0, Mode: BoundaryMode.Exclusive } => "every opening is deducted",
+            { Mode: BoundaryMode.Exclusive } => $"openings smaller than {threshold} {unit} are not deducted (exclusive)",
+            { Mode: BoundaryMode.Inclusive } => $"openings up to {threshold} {unit} are not deducted (inclusive)",
             _ => throw new ArgumentOutOfRangeException(nameof(criterion), criterion.Threshold.Mode, "Not a declared boundary mode."),
         };
 

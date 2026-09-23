@@ -48,8 +48,8 @@ public sealed record CriteriaSet
     /// <remarks>
     /// <c>takeoff-configuration</c>, requirement "Usable Defaults Without Any
     /// Configuration": the add-in ships these and runs correctly with no file, and
-    /// that absence is not an error. They cover the six categories extraction
-    /// reads (task 2.2): walls, floors and roofs by area in m² with the openings
+    /// that absence is not an error. They cover the six categories the add-in
+    /// measures (task 2.2; extraction reads walls only until task 2.6): walls, floors and roofs by area in m² with the openings
     /// correction, railings by length in m, doors and windows counted in u.
     /// </remarks>
     public static CriteriaSet Default => BuiltIn;

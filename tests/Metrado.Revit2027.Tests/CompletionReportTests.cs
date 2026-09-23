@@ -110,6 +110,16 @@ public sealed class CompletionReportTests
         Assert.Contains("HOST_AREA_COMPUTED", summary);
     }
 
+    /// <summary>A zero exclusive threshold adds nothing back; "smaller than 0 m" says so only to a mathematician.</summary>
+    [Fact]
+    public void AZeroThresholdIsDescribedAsDeductingEveryOpening()
+    {
+        string summary = CompletionReport.For(Report(lines: 1, unclassified: 0), Defaults(), Workbook).Summary;
+
+        Assert.Contains("Railings: measured in m from CURVE_ELEM_LENGTH; every opening is deducted.", summary);
+        Assert.DoesNotContain("smaller than 0", summary);
+    }
+
     [Fact]
     public void EveryWarningIsListedInTheDetails()
     {
