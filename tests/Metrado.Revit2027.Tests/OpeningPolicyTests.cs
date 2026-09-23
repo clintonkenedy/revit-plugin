@@ -48,7 +48,70 @@ public sealed class OpeningPolicyTests
         { "non-finite outline", Door() with { CutoutSquareFeet = double.NaN }, "no area" },
         { "beyond the top", Door() with { Outline = new Box(1, 4, 0, 10.5) }, "beyond the wall" },
         { "beyond the end", Door() with { Outline = new Box(-0.5, 3, 0, 7) }, "beyond the wall" },
+        { "beyond the far end", Door() with { Outline = new Box(18, 20.5, 0, 7) }, "beyond the wall" },
+        { "below the base", Door() with { Outline = new Box(1, 4, -0.3, 7) }, "beyond the wall" },
+        // A millionth of a foot past the top: containment has numerical slack only.
+        { "barely beyond", Door() with { Outline = new Box(1, 4, 0, 10.000001) }, "beyond the wall" },
+        { "unknown position", Door() with { Outline = null }, "position" },
+        { "opening hosted elsewhere", Door() with { Kind = InsertKind.RectangularOpening, HostedByWall = false }, "hosted by another" },
+        { "opening beyond the wall", Door() with { Kind = InsertKind.RectangularOpening, Outline = new Box(1, 4, 0, 11) }, "beyond the wall" },
     };
+
+    [Fact]
+    public void ACleanRectangularOpeningIsMeasured()
+    {
+        OpeningDecision decision = Decide(Door() with { Kind = InsertKind.RectangularOpening, CutoutSquareFeet = 12.0 });
+
+        Assert.Equal([new OpeningReading("door", 12.0)], decision.Measured);
+    }
+
+    /// <summary>Each measured opening keeps its own area, never another's.</summary>
+    [Fact]
+    public void EveryMeasuredOpeningKeepsItsOwnArea()
+    {
+        OpeningDecision decision = Decide(
+            Door() with { UniqueId = "a", CutoutSquareFeet = 21.0, Outline = new Box(1, 4, 0, 7) },
+            Door() with { UniqueId = "b", CutoutSquareFeet = 9.5, Outline = new Box(6, 8, 3, 7) });
+
+        Assert.Equal([new OpeningReading("a", 21.0), new OpeningReading("b", 9.5)], decision.Measured);
+    }
+
+    /// <summary>Outlines one above the other share a range along the wall but no area.</summary>
+    [Fact]
+    public void OutlinesStackedInHeightDoNotOverlap()
+    {
+        OpeningDecision decision = Decide(
+            Door() with { UniqueId = "low", Outline = new Box(1, 4, 0, 3) },
+            Door() with { UniqueId = "high", Outline = new Box(1, 4, 5, 8) });
+
+        Assert.Equal(["low", "high"], decision.Measured.Select(opening => opening.UniqueId));
+    }
+
+    /// <summary>
+    /// A joined floor, beam or column that cuts the wall removes area too, and
+    /// Revit deducts an opening overlapping it by the union only once.
+    /// </summary>
+    [Fact]
+    public void AnOpeningOverlappingAJoinedCutterIsReported()
+    {
+        OpeningDecision decision = OpeningPolicy.Decide(
+            new WallFacts(Wall, [], OtherCuts: [new Box(0, 20, 6.5, 7.5)]),
+            [Door()]);
+
+        Assert.Empty(decision.Measured);
+        Assert.Contains("overlaps", Assert.Single(decision.Unmeasured).Reason);
+    }
+
+    /// <summary>A door standing on a joined slab touches its cut and shares no area with it.</summary>
+    [Fact]
+    public void AJoinedCutterThatOnlyTouchesRulesNothingOut()
+    {
+        OpeningDecision decision = OpeningPolicy.Decide(
+            new WallFacts(Wall, [], OtherCuts: [new Box(0, 20, -0.5, 0)]),
+            [Door()]);
+
+        Assert.Single(decision.Measured);
+    }
 
     [Theory]
     [MemberData(nameof(Untrustworthy))]

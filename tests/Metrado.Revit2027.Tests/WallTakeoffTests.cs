@@ -144,6 +144,40 @@ public sealed class WallTakeoffTests
         Assert.Equal(1.0, Assert.Single(takeoff.Openings).Amount.Value);
     }
 
+    /// <summary>
+    /// Noise larger than one unit in the last place is rounded away too: a
+    /// fourteen-nines value is still a metre squared, not a hair under it.
+    /// </summary>
+    [Theory]
+    [InlineData(1.0000000000000002)]
+    [InlineData(0.99999999999999)]
+    [InlineData(1.0000000000001)]
+    public void RoundingRemovesNoiseWellBeyondOneUlp(double noisy)
+    {
+        ElementTakeoff takeoff = WallTakeoff.From(Reading(), _ => noisy);
+
+        Assert.Equal(1.0, Assert.Single(takeoff.Quantities).Amount.Value);
+    }
+
+    [Fact]
+    public void EveryUnmeasuredOpeningGetsItsOwnWarning()
+    {
+        WallReading reading = Reading(unmeasured:
+        [
+            new UnmeasuredOpening("void-niche", "a void cut"),
+            new UnmeasuredOpening("shadow-window", "hosted by another wall"),
+        ]);
+
+        IReadOnlyList<ValidationWarning> warnings = WallTakeoff.Warnings(WallTakeoff.From(reading, Doubled), reading);
+
+        Assert.Collection(
+            warnings,
+            first => Assert.Contains("void-niche", first.Condition),
+            second => Assert.Contains("shadow-window", second.Condition));
+        Assert.Contains("a void cut", warnings[0].Condition);
+        Assert.Contains("hosted by another wall", warnings[1].Condition);
+    }
+
     /// <summary>The rounding removes noise only: a real ninth decimal survives it.</summary>
     [Fact]
     public void RoundingKeepsEveryRealDecimal()

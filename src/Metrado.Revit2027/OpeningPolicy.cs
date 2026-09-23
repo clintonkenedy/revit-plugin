@@ -36,7 +36,12 @@ public sealed record InsertFacts(
 
 /// <param name="Extent">The wall solid's own range, which joins and attachments can move off the location line.</param>
 /// <param name="Conditions">Wall conditions under which an outline no longer matches Revit's deduction.</param>
-public sealed record WallFacts(Box Extent, IReadOnlyList<string> Conditions);
+/// <param name="OtherCuts">
+/// Where joined elements that are not inserts — floors, beams, columns — cut
+/// the wall, as ranges of the faces they generate on it. They remove area
+/// too, so an opening overlapping one is deducted by the union only once.
+/// </param>
+public sealed record WallFacts(Box Extent, IReadOnlyList<string> Conditions, IReadOnlyList<Box>? OtherCuts = null);
 
 public sealed record OpeningDecision(
     IReadOnlyList<OpeningReading> Measured,
@@ -90,6 +95,7 @@ public static class OpeningPolicy
             .Select(a => (a.UniqueId, Reason: unlocatable
                 ? "another cut in this wall cannot be located, so an overlap with it cannot be ruled out"
                 : cutting.Any(b => b != a && Overlap(a.Outline!, b.Outline!))
+                    || (wall.OtherCuts ?? []).Any(cut => Overlap(a.Outline!, cut))
                     ? "its outline overlaps another cut in this wall, and Revit deducts their union only once"
                     : null))
             .Where(entry => entry.Reason is not null)
