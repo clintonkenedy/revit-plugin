@@ -38,6 +38,34 @@ public sealed class SurfaceTopologyTests
         Assert.Empty(holes);
     }
 
+    /// <summary>
+    /// A face's loops must reproduce its area: outer less holes. Where they
+    /// miss by more than a millionth, a loop's area is not the face's hole.
+    /// </summary>
+    [Theory]
+    [InlineData(995.2, true)]
+    [InlineData(995.2009, true)]
+    [InlineData(995.2021, false)]
+    [InlineData(995.1979, false)]
+    [InlineData(null, false)]
+    public void AHoleIsTrustedOnlyWhereItsFacesLoopsAddUp(double? faceArea, bool addsUp)
+    {
+        (IReadOnlyList<HoleFacts> holes, _) = Assemble([new(1, [], faceArea), .. Faces.Skip(1)], [Outer, ShaftHole]);
+
+        Assert.Equal(addsUp, Assert.Single(holes).FaceAddsUp);
+    }
+
+    /// <summary>Each face is judged on its own loops, not on another face's.</summary>
+    [Fact]
+    public void EachFaceIsJudgedOnItsOwnLoops()
+    {
+        (IReadOnlyList<HoleFacts> holes, _) = Assemble(
+            [new(1, [], 995.2), .. Faces.Skip(1), new(11, [], 49.0)],
+            [Outer, ShaftHole, new LoopFacts(11, true, 50.0, []), new LoopFacts(11, false, 1.0, [])]);
+
+        Assert.Equal([true, true], holes.Select(hole => hole.FaceAddsUp));
+    }
+
     /// <summary>A face across the hole that no other element generated is the host's own outline.</summary>
     [Fact]
     public void AFaceOnlyTheHostGeneratedMakesTheHoleItsOwn()

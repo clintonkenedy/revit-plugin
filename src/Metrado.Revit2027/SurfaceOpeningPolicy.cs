@@ -19,7 +19,8 @@ public enum CutterKind
 /// <summary>A hole in the host's upper faces: an inner edge loop of an up-facing face.</summary>
 /// <param name="Generators">The elements other than the host generating the faces across its edges.</param>
 /// <param name="DrawnByHost">Some face across its edges is the host's alone: its own outline draws the hole, or part of it.</param>
-public sealed record HoleFacts(double AreaSquareFeet, IReadOnlyList<string> Generators, bool DrawnByHost);
+/// <param name="FaceAddsUp">The loops of the face holding it reproduce that face's area, so each loop's area is the face's.</param>
+public sealed record HoleFacts(double AreaSquareFeet, IReadOnlyList<string> Generators, bool DrawnByHost, bool FaceAddsUp = true);
 
 /// <param name="BeyondItsHoles">
 /// It generates a face that bounds none of its holes: it also cuts an edge,
@@ -44,8 +45,11 @@ public sealed record SurfaceFacts(string UniqueId, double? ComputedSquareFeet, d
 /// </summary>
 public static class SurfaceOpeningPolicy
 {
-    /// <summary>Floating-point noise only: a millionth of the computed area.</summary>
-    private const double RelativeTolerance = 1e-6;
+    /// <summary>Floating-point noise only: a millionth of the area compared.</summary>
+    internal const double RelativeTolerance = 1e-6;
+
+    private const string FaceMissesItsArea =
+        "the edge loops of the face holding its hole do not add up to that face's area, so the hole's own area cannot be trusted";
 
     public static OpeningDecision Decide(SurfaceFacts surface, IReadOnlyList<CutterFacts> cutters)
     {
@@ -73,6 +77,7 @@ public static class SurfaceOpeningPolicy
                 { BeyondItsHoles: false } when holes.Count == 0 => "no face of the host names it, so its cut cannot be located",
                 _ when holes.Count == 0 => "no hole in the upper faces is its own: it cuts an edge, or the surface only from below",
                 _ when holes.Any(Shared) => "its hole is shared with another cut, and Revit deducts their union only once",
+                _ when holes.Any(hole => !hole.FaceAddsUp) => FaceMissesItsArea,
                 { BeyondItsHoles: true } => "it also cuts faces beyond its holes, such as an edge, which no hole outlines",
                 _ => Measurable(area),
             }));
@@ -87,6 +92,7 @@ public static class SurfaceOpeningPolicy
                 string reason => reason,
                 _ when Shared(hole) => "this hole in its own outline is shared with another cut, and Revit deducts their union only once",
                 _ when unnamed => "an opening no face of the host names cuts it too, so this hole may be that opening's",
+                _ when !hole.FaceAddsUp => FaceMissesItsArea,
                 _ => Measurable(hole.AreaSquareFeet),
             }));
         }

@@ -2,7 +2,8 @@ namespace Metrado.Revit2027;
 
 /// <summary>One face of a floor or roof, by the id Revit gives it within the element's geometry.</summary>
 /// <param name="Generators">The elements other than the host that generated it.</param>
-public sealed record FaceFacts(int Id, IReadOnlyList<string> Generators);
+/// <param name="UpperAreaSquareFeet">An up-facing face's area; null for any other face.</param>
+public sealed record FaceFacts(int Id, IReadOnlyList<string> Generators, double? UpperAreaSquareFeet = null);
 
 /// <summary>One edge loop of an up-facing face.</summary>
 /// <param name="Outer">Counterclockwise about the face's normal: the face's outer boundary, not a hole.</param>
@@ -34,13 +35,23 @@ public static class SurfaceTopology
             .GroupBy(face => face.Id)
             .ToDictionary(same => same.Key, same => same.SelectMany(face => face.Generators).Distinct().ToList());
 
+        // A face's loops, outer less holes, must reproduce its area; where
+        // they miss, some loop's area is not the face's.
+        HashSet<int> addsUp = [.. loops
+            .GroupBy(loop => loop.Face)
+            .Where(face => faces.FirstOrDefault(known => known.Id == face.Key)?.UpperAreaSquareFeet is double area
+                && Math.Abs(face.Sum(loop => loop.Outer ? loop.AreaSquareFeet : -loop.AreaSquareFeet) - area)
+                    <= SurfaceOpeningPolicy.RelativeTolerance * Math.Abs(area))
+            .Select(face => face.Key)];
+
         // A face across the hole that no other element generated is the
         // host's own outline, drawing the hole or part of it.
         List<(HoleFacts Hole, HashSet<int> Faces)> holes = [.. loops.Where(loop => !loop.Outer).Select(loop => (
             new HoleFacts(
                 loop.AreaSquareFeet,
                 [.. loop.Across.SelectMany(id => generators.GetValueOrDefault(id) ?? []).Distinct()],
-                loop.Across.Any(id => generators.GetValueOrDefault(id) is not { Count: > 0 })),
+                loop.Across.Any(id => generators.GetValueOrDefault(id) is not { Count: > 0 }),
+                addsUp.Contains(loop.Face)),
             new HashSet<int>([loop.Face, .. loop.Across])))];
 
         List<string> cutting = [.. faces.SelectMany(face => face.Generators).Distinct()];

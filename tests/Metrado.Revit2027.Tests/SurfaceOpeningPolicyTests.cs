@@ -72,6 +72,9 @@ public sealed class SurfaceOpeningPolicyTests
         { "a hole with no area", Slab(Hole(0.0, "shaft")), "no area" },
         { "a hole of unknown area", Slab(Hole(double.NaN, "shaft")), "no area" },
         { "a hole of infinite area", Slab(Hole(double.PositiveInfinity, "shaft")), "no area" },
+        // On the Snowdon sample one shaft's loop measured 0.0018 m2 more than
+        // it deducted, on exactly the five faces whose loops missed their area.
+        { "a face whose loops miss its area", Slab(Hole(4.8, "shaft") with { FaceAddsUp = false }), "do not add up to that face" },
         { "faces that do not add up", Slab(Hole(4.8, "shaft")) with { UpperFacesSquareFeet = 1001.0 }, "do not add up" },
         { "no computed area", Slab(Hole(4.8, "shaft")) with { ComputedSquareFeet = null }, "do not add up" },
     };
@@ -149,6 +152,15 @@ public sealed class SurfaceOpeningPolicyTests
         Assert.Empty(decision.Measured);
         Assert.Equal(["shaft", "floor/hole-1"], decision.Unmeasured.Select(opening => opening.UniqueId));
         Assert.All(decision.Unmeasured, opening => Assert.Contains("shared", opening.Reason, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AnOwnHoleOnAFaceWhoseLoopsMissItsAreaIsReported()
+    {
+        OpeningDecision decision = Decide(Slab(Hole(0.5) with { FaceAddsUp = false }));
+
+        Assert.Empty(decision.Measured);
+        Assert.Contains("do not add up to that face", Assert.Single(decision.Unmeasured).Reason, StringComparison.Ordinal);
     }
 
     /// <summary>The host's own hole with a column in it: neither part can be measured alone.</summary>

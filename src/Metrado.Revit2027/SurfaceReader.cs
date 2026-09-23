@@ -98,7 +98,10 @@ public static class SurfaceReader
         }
 
         (IReadOnlyList<HoleFacts> holes, IReadOnlyList<CutterFacts> cutters) = SurfaceTopology.Assemble(
-            [.. faces.Select((face, index) => new FaceFacts(face.Id, [.. generators[index].Select(id => Name(document, id))]))],
+            [.. faces.Select((face, index) => new FaceFacts(
+                face.Id,
+                [.. generators[index].Select(id => Name(document, id))],
+                face is PlanarFace { FaceNormal.Z: > UpFacing } ? face.Area : null))],
             loops,
             named.ToDictionary(id => Name(document, id), id => Kind(host, document.GetElement(id), voids)),
             // An opening element cuts its host whatever the faces say: on the
