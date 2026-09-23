@@ -49,6 +49,14 @@ public static class TakeoffExport
                 continue;
             }
 
+            // A category taken off by layer: its materials' lines, unless they
+            // do not account for all of it, when it is measured whole below,
+            // under its own code, its reason already reported.
+            if (criterion.Layers is not null && ByLayer(element, criterion, chain, lineas, warnings))
+            {
+                continue;
+            }
+
             MetradoOutcome outcome = Measurement.Measure(element, criterion);
             if (outcome.Warning is not null)
             {
@@ -68,6 +76,41 @@ public static class TakeoffExport
 
         TakeoffResult grouped = TakeoffResult.Group(lineas);
         return new Outcome(grouped, RunReport.For(grouped, warnings));
+    }
+
+    /// <summary>
+    /// Takes a layered element off by its materials, each line coded by its
+    /// material (task 3.2); false when it must be measured whole, its reason
+    /// already among the warnings.
+    /// </summary>
+    private static bool ByLayer(
+        ElementTakeoff element,
+        CategoryCriterion criterion,
+        CodificationChain chain,
+        List<Linea> lineas,
+        List<ValidationWarning> warnings)
+    {
+        IReadOnlyList<LayerLine>? lines = LayerMeasurement.Measure(element, criterion).Match<IReadOnlyList<LayerLine>?>(
+            byLayer: (measured, raised) =>
+            {
+                warnings.AddRange(raised);
+                return measured;
+            },
+            whole: why =>
+            {
+                warnings.Add(why);
+                return null;
+            });
+        if (lines is null)
+        {
+            return false;
+        }
+
+        lineas.AddRange(lines.Select(line => new Linea(element, chain.ResolveLayer(element, line.Layer.Material), line.Metrado, line.Layer)));
+
+        // Each opening was decided once, at the host's threshold, so it is flagged once.
+        warnings.AddRange(NearThreshold(element, criterion.Threshold));
+        return true;
     }
 
     private static IEnumerable<ValidationWarning> NearThreshold(ElementTakeoff element, OpeningsThreshold threshold) =>

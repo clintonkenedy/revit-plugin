@@ -65,17 +65,29 @@ public sealed class ReadableSourcesTests
         Assert.NotNull(ReadableSources.Check(new CriteriaSet(new Dictionary<string, CategoryCriterion> { ["Railings"] = railings })));
     }
 
-    /// <summary>Until the export measures by layer, criteria asking for it are refused rather than silently measured whole.</summary>
+    /// <summary>The hosts are taken off by layer when the criteria ask, and only theirs are read so.</summary>
     [Theory]
     [InlineData("Walls")]
     [InlineData("Floors")]
     [InlineData("Roofs")]
-    public void ACategoryTakenOffByLayerIsRefusedUntilTheExportReadsLayers(string category)
+    public void WallsFloorsAndRoofsMayBeTakenOffByLayer(string category)
     {
-        ConfigError error = Assert.IsType<ConfigError>(ReadableSources.Check(Criteria(new CategoryOverride(category, layers: LayerOverride.On(new Dictionary<LayerFunction, QuantityUnit>())))));
+        CriteriaSet criteria = Criteria(new CategoryOverride(category, layers: LayerOverride.On(new Dictionary<LayerFunction, QuantityUnit>())));
 
-        Assert.Contains($"take {category} off by material layer", error.Message, StringComparison.Ordinal);
-        Assert.Empty(ReadableSources.LayeredCategories);
+        Assert.Null(ReadableSources.Check(criteria));
+        Assert.Equal([category], ReadableSources.Layered(criteria));
+    }
+
+    /// <summary>Layers stated off, or left out, are not read: a run with no criteria file reads none.</summary>
+    [Fact]
+    public void OnlyTheCategoriesTakenOffByLayerHaveTheirLayersRead()
+    {
+        CriteriaSet criteria = CriteriaSet.Merge(
+            CriteriaSet.Default,
+            [new CategoryOverride("Roofs", layers: LayerOverride.On(new Dictionary<LayerFunction, QuantityUnit>())), new CategoryOverride("Floors", layers: LayerOverride.Off)]).Value;
+
+        Assert.Equal(["Roofs"], ReadableSources.Layered(criteria));
+        Assert.Empty(ReadableSources.Layered(CriteriaSet.Default));
     }
 
     [Fact]

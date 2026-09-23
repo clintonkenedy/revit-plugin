@@ -21,16 +21,21 @@ public static class ReadableSources
     };
 
     /// <summary>
-    /// The categories the export takes off by material layer when the criteria
-    /// ask. None until the export measures by layer (PR 32): until then such
-    /// criteria are refused, never measured whole without a word.
+    /// The categories whose layers extraction reads: those the criteria take
+    /// off by layer, which the domain allows only for walls, floors and roofs.
+    /// With no criteria file none is, and no layer is read.
     /// </summary>
-    public static IReadOnlySet<string> LayeredCategories { get; } = new HashSet<string>(StringComparer.Ordinal);
+    public static IReadOnlySet<string> Layered(CriteriaSet criteria)
+    {
+        ArgumentNullException.ThrowIfNull(criteria);
+        return new HashSet<string>(
+            criteria.ByCategory.Values.Where(criterion => criterion.Layers is not null).Select(criterion => criterion.Category),
+            StringComparer.Ordinal);
+    }
 
     /// <summary>
     /// Null when every source the criteria name for an extracted category is
-    /// one extraction reads, and every category they take off by layer is one
-    /// the export takes off so.
+    /// one extraction reads.
     /// </summary>
     public static ConfigError? Check(CriteriaSet criteria)
     {
@@ -51,16 +56,6 @@ public static class ReadableSources
                     + (readable.Count == 0
                         ? "it reads no quantity for them, since they are counted."
                         : $"it reads {string.Join(", ", readable)}."));
-            }
-        }
-
-        foreach ((string category, CategoryCriterion criterion) in criteria.ByCategory)
-        {
-            if (criterion.Layers is not null && !LayeredCategories.Contains(category))
-            {
-                return new ConfigError(
-                    $"The criteria ask to take {category} off by material layer, which Metrado does not do yet: "
-                    + "leave out its \"layers\", or set it to false.");
             }
         }
 

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
@@ -60,13 +61,15 @@ public sealed class ExportTakeoffCommand : IExternalCommand
             // stops the export before the long read, not after it.
             using ExportFiles files = ExportFiles.Reserve(workbook);
 
-            ExtractionService.Extraction extraction = ExtractionService.Extract(document);
+            // Layers are read only for the categories the criteria take off by layer.
+            Stopwatch clock = Stopwatch.StartNew();
+            ExtractionService.Extraction extraction = ExtractionService.Extract(document, sharedParameter: null, ReadableSources.Layered(criteria.Value.Criteria));
             TakeoffExport.Outcome outcome = TakeoffExport.Run(criteria.Value, extraction.Elements, extraction.Warnings);
             TakeoffWorkbook.Write(outcome.Result, files.Workbook);
 
             report = CompletionReport.For(outcome.Report, criteria.Value, workbook);
             files.Commit(report.WarningsList);
-            Journal(commandData, report, extraction);
+            Journal(commandData, report, extraction, clock.Elapsed);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -86,11 +89,12 @@ public sealed class ExportTakeoffCommand : IExternalCommand
         return Result.Succeeded;
     }
 
-    /// <summary>The journal keeps what the dialog showed, and why each opening was reported.</summary>
-    private static void Journal(ExternalCommandData commandData, CompletionReport.Text report, ExtractionService.Extraction extraction)
+    /// <summary>The journal keeps what the dialog showed, how long the export took, and why each opening was reported.</summary>
+    private static void Journal(ExternalCommandData commandData, CompletionReport.Text report, ExtractionService.Extraction extraction, TimeSpan took)
     {
         Autodesk.Revit.ApplicationServices.Application application = commandData.Application.Application;
         application.WriteJournalComment($"Metrado: {report.Summary.Replace(Environment.NewLine, " | ", StringComparison.Ordinal)}", true);
+        application.WriteJournalComment(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"Metrado: read, measured and written in {took.TotalSeconds:0.0} s"), false);
         foreach (IGrouping<string, string> reason in extraction.UnmeasuredReasons
             .GroupBy(reason => reason)
             .OrderByDescending(group => group.Count()))
