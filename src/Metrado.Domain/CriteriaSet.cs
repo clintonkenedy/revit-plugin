@@ -231,13 +231,23 @@ public sealed record CriteriaSet
             return Result<CategoryCriterion, ConfigError>.Err(layers.Error);
         }
 
+        // Neither refusal names a value: what the file wrote is true or an
+        // object, and the field's own name is not what was written.
+        if (layers.Value is not null && !CategoryCriterion.LayeredCategories.Contains(entry.Category))
+        {
+            return Result<CategoryCriterion, ConfigError>.Err(Rejected(
+                $"'{entry.Category}' cannot be taken off by material layer: only walls, floors and roofs have layers.",
+                entry.Category,
+                invalidValue: null));
+        }
+
         if (layers.Value is not null && (unit != QuantityUnit.SquareMetre || sources.Count == 0))
         {
             return Result<CategoryCriterion, ConfigError>.Err(Rejected(
                 $"'{entry.Category}' cannot be taken off by material layer: a layered category is measured in m2 from a quantity source, "
                     + "since its openings and threshold are areas.",
                 entry.Category,
-                "layers"));
+                invalidValue: null));
         }
 
         return Result<CategoryCriterion, ConfigError>.Ok(
@@ -254,7 +264,7 @@ public sealed record CriteriaSet
             ? Result<LayerCriterion?, ConfigError>.Ok(created.Value)
             : Result<LayerCriterion?, ConfigError>.Err(created.Error);
 
-    private static ConfigError Rejected(string message, string category, string invalidValue) =>
+    private static ConfigError Rejected(string message, string category, string? invalidValue) =>
         new ConfigError(message) { Category = category, InvalidValue = invalidValue };
 
     /// <summary>

@@ -68,8 +68,35 @@ public sealed class LayerCriteriaTests
 
         Assert.Same(LayerCriterion.Default, new CategoryCriterion("Walls", walls.Unit, walls.Sources, walls.Threshold, LayerCriterion.Default).Layers);
         Assert.Throws<ArgumentException>(() => new CategoryCriterion("Doors", doors.Unit, doors.Sources, doors.Threshold, LayerCriterion.Default));
+        Assert.Throws<ArgumentException>(() => new CategoryCriterion("Railings", walls.Unit, walls.Sources, walls.Threshold, LayerCriterion.Default));
         Assert.Throws<ArgumentException>(() => new CategoryCriterion("Walls", QuantityUnit.CubicMetre, walls.Sources,
             OpeningsThreshold.TryCreate(1, QuantityUnit.CubicMetre, BoundaryMode.Exclusive, "Walls").Value, LayerCriterion.Default));
+    }
+
+    /// <summary>
+    /// Layer lines are corrected without the whole path's unit check, so a
+    /// layered criterion's threshold must be an area: one in m3, or a default
+    /// threshold with no unit and no mode, would be added into m2 lines.
+    /// </summary>
+    [Fact]
+    public void ALayeredCriterionsThresholdIsAnArea()
+    {
+        CategoryCriterion walls = CriteriaSet.Default.ByCategory["Walls"];
+
+        Assert.Throws<ArgumentException>(() => new CategoryCriterion("Walls", walls.Unit, walls.Sources,
+            OpeningsThreshold.TryCreate(1, QuantityUnit.CubicMetre, BoundaryMode.Exclusive, "Walls").Value, LayerCriterion.Default));
+        Assert.Throws<ArgumentException>(() => new CategoryCriterion("Walls", walls.Unit, walls.Sources, default, LayerCriterion.Default));
+        Assert.Null(new CategoryCriterion("Walls", walls.Unit, walls.Sources, default).Layers);
+    }
+
+    /// <summary>A unit Metrado does not declare is refused, never thrown on while describing it.</summary>
+    [Fact]
+    public void AnUndeclaredUnitIsRefused()
+    {
+        Result<LayerCriterion, ConfigError> layers = LayerCriterion.TryCreate(new Dictionary<LayerFunction, QuantityUnit> { [LayerFunction.Structure] = (QuantityUnit)99 }, "Walls");
+
+        Assert.False(layers.IsOk);
+        Assert.Contains("not an undeclared unit", layers.Error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -104,9 +131,10 @@ public sealed class LayerCriteriaTests
 
     public static TheoryData<CategoryOverride, string> RefusedLayered() => new()
     {
-        { new CategoryOverride("Doors", layers: LayerOverride.On(new Dictionary<LayerFunction, QuantityUnit>())), "Doors" },
-        { new CategoryOverride("Railings", layers: LayerOverride.On(new Dictionary<LayerFunction, QuantityUnit>())), "Railings" },
-        { new CategoryOverride("Walls", QuantityUnit.CubicMetre, ["HOST_VOLUME_COMPUTED"], layers: LayerOverride.On(new Dictionary<LayerFunction, QuantityUnit>())), "Walls" },
+        { new CategoryOverride("Doors", layers: LayerOverride.On(new Dictionary<LayerFunction, QuantityUnit>())), "'Doors' cannot be taken off by material layer: only walls, floors and roofs have layers." },
+        { new CategoryOverride("Railings", layers: LayerOverride.On(new Dictionary<LayerFunction, QuantityUnit>())), "'Railings' cannot be taken off by material layer: only walls, floors and roofs have layers." },
+        { new CategoryOverride("Railings", QuantityUnit.SquareMetre, layers: LayerOverride.On(new Dictionary<LayerFunction, QuantityUnit>())), "'Railings' cannot be taken off by material layer: only walls, floors and roofs have layers." },
+        { new CategoryOverride("Walls", QuantityUnit.CubicMetre, ["HOST_VOLUME_COMPUTED"], layers: LayerOverride.On(new Dictionary<LayerFunction, QuantityUnit>())), "'Walls' cannot be taken off by material layer: a layered category is measured in m2" },
         { new CategoryOverride("Walls", layers: LayerOverride.On(new Dictionary<LayerFunction, QuantityUnit> { [LayerFunction.Membrane] = QuantityUnit.CubicMetre })), "Membrane" },
     };
 
@@ -118,6 +146,9 @@ public sealed class LayerCriteriaTests
 
         Assert.False(merged.IsOk);
         Assert.Contains(phrase, merged.Error.Message, StringComparison.Ordinal);
+
+        // What the file wrote is true or an object, never a value to quote back.
+        Assert.Null(merged.Error.InvalidValue);
     }
 
     [Fact]

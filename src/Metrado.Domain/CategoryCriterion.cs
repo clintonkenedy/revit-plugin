@@ -38,13 +38,20 @@ public sealed record CategoryCriterion
                 nameof(unit));
         }
 
+        if (layers is not null && !LayeredCategories.Contains(category))
+        {
+            throw new ArgumentException($"The {category} criterion cannot be taken off by material layer: only walls, floors and roofs have layers.", nameof(layers));
+        }
+
         // A layered element falls back to whole when its layers cannot be
         // trusted, and its openings and threshold are areas: only an area
-        // measured from a source can be taken off by layer.
-        if (layers is not null && (unit != QuantityUnit.SquareMetre || sources.Count == 0))
+        // measured from a source can be taken off by layer. Layer lines are
+        // corrected without the whole path's unit check, so the threshold's
+        // unit is checked here, which also refuses a default threshold.
+        if (layers is not null && (unit != QuantityUnit.SquareMetre || sources.Count == 0 || threshold.Unit != QuantityUnit.SquareMetre))
         {
             throw new ArgumentException(
-                $"The {category} criterion is taken off by material layer, so it is measured in m2 from a quantity source.",
+                $"The {category} criterion is taken off by material layer, so it is measured in m2 from a quantity source, with its threshold in m2.",
                 nameof(layers));
         }
 
@@ -52,6 +59,9 @@ public sealed record CategoryCriterion
         Threshold = threshold;
         Layers = layers;
     }
+
+    /// <summary>The categories that can be taken off by material layer: the hosts, whose types have layers.</summary>
+    public static IReadOnlyCollection<string> LayeredCategories { get; } = new HashSet<string>(StringComparer.Ordinal) { "Walls", "Floors", "Roofs" };
 
     /// <summary>The Revit category this criterion measures.</summary>
     public string Category { get; }
