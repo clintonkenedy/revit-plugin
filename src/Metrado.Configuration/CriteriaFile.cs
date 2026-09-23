@@ -1,0 +1,259 @@
+using System.Globalization;
+using System.Text;
+using System.Text.Json;
+using Metrado.Domain;
+
+namespace Metrado.Configuration;
+
+/// <param name="Override">The fields the entry states, and nothing about the ones it left out.</param>
+/// <param name="Location">Where the entry's category name is written, so a later refusal can point at it.</param>
+public sealed record LocatedOverride(CategoryOverride Override, ConfigLocation Location);
+
+/// <summary>
+/// Reads a criteria file (D5): JSON with comments and trailing commas, one
+/// entry per category, each field optional and inherited from the built-in
+/// criterion when left out:
+/// <code>
+/// {
+///   // Walls: small openings stay in the metrado
+///   "Walls": { "unit": "m2", "sources": ["HOST_AREA_COMPUTED"], "threshold": 1.0, "mode": "exclusive" },
+/// }
+/// </code>
+/// What the file's own shape can tell is refused here, with the line and
+/// position where it is: malformed syntax, an entry that is not an object, an
+/// unknown or repeated field, a value of the wrong kind, a unit or mode outside
+/// its closed set. What only the product's criteria can judge (an unsupported
+/// category, a repeated one, a negative threshold) is passed on as written for
+/// <see cref="CriteriaSet.Merge"/> to refuse. A field the reader ignored would
+/// leave its category on the default without a word, so nothing is ignored.
+/// </summary>
+public static class CriteriaFile
+{
+    private const string Unit = "unit";
+    private const string Sources = "sources";
+    private const string Threshold = "threshold";
+    private const string Mode = "mode";
+
+    private static readonly string[] Fields = [Unit, Sources, Threshold, Mode];
+
+    private static readonly Dictionary<string, BoundaryMode> Modes = new(StringComparer.Ordinal)
+    {
+        ["exclusive"] = BoundaryMode.Exclusive,
+        ["inclusive"] = BoundaryMode.Inclusive,
+    };
+
+    private static readonly JsonReaderOptions Options = new()
+    {
+        CommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true,
+    };
+
+    /// <summary>The entries of a criteria file, in the order written, or why the file cannot be honoured.</summary>
+    /// <remarks>Lines and positions count from 1, as an editor shows them; positions count bytes of UTF-8.</remarks>
+    public static Result<IReadOnlyList<LocatedOverride>, ConfigError> Parse(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        byte[] utf8 = Encoding.UTF8.GetBytes(text);
+        Utf8JsonReader reader = new(utf8, Options);
+        try
+        {
+            return ReadFile(ref reader, utf8);
+        }
+        catch (JsonException ex)
+        {
+            return Result<IReadOnlyList<LocatedOverride>, ConfigError>.Err(
+                new ConfigError($"The file is not valid JSON: {Reason(ex)}")
+                {
+                    Location = new ConfigLocation((ex.LineNumber ?? 0) + 1, (ex.BytePositionInLine ?? 0) + 1),
+                });
+        }
+    }
+
+    private static Result<IReadOnlyList<LocatedOverride>, ConfigError> ReadFile(ref Utf8JsonReader reader, byte[] utf8)
+    {
+        if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
+        {
+            return Refuse<IReadOnlyList<LocatedOverride>>(
+                At(utf8, reader.TokenStartIndex),
+                "The file must be a JSON object with one entry per category, such as { \"Walls\": { \"threshold\": 1.0 } }.");
+        }
+
+        List<LocatedOverride> entries = [];
+        while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+        {
+            ConfigLocation where = At(utf8, reader.TokenStartIndex);
+            string category = reader.GetString()!;
+            if (string.IsNullOrWhiteSpace(category))
+            {
+                return Refuse<IReadOnlyList<LocatedOverride>>(where, "An entry has no category name.");
+            }
+
+            reader.Read();
+            if (reader.TokenType != JsonTokenType.StartObject)
+            {
+                return Refuse<IReadOnlyList<LocatedOverride>>(
+                    At(utf8, reader.TokenStartIndex),
+                    $"The entry for '{category}' must be an object of fields, such as {{ \"threshold\": 1.0 }}.",
+                    category);
+            }
+
+            Result<CategoryOverride, ConfigError> entry = ReadEntry(ref reader, utf8, category);
+            if (!entry.IsOk)
+            {
+                return Result<IReadOnlyList<LocatedOverride>, ConfigError>.Err(entry.Error);
+            }
+
+            entries.Add(new LocatedOverride(entry.Value, where));
+        }
+
+        // The reader itself refuses anything after the closing brace.
+        while (reader.Read())
+        {
+        }
+
+        return Result<IReadOnlyList<LocatedOverride>, ConfigError>.Ok(entries);
+    }
+
+    private static Result<CategoryOverride, ConfigError> ReadEntry(ref Utf8JsonReader reader, byte[] utf8, string category)
+    {
+        QuantityUnit? unit = null;
+        List<string>? sources = null;
+        double? threshold = null;
+        BoundaryMode? mode = null;
+        HashSet<string> stated = new(StringComparer.Ordinal);
+
+        while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+        {
+            ConfigLocation fieldAt = At(utf8, reader.TokenStartIndex);
+            string field = reader.GetString()!;
+            if (!Fields.Contains(field, StringComparer.Ordinal))
+            {
+                return Refuse<CategoryOverride>(
+                    fieldAt,
+                    $"'{field}' is not a field of the entry for '{category}'. Accepted fields: {string.Join(", ", Fields)}.",
+                    category,
+                    field);
+            }
+
+            if (!stated.Add(field))
+            {
+                return Refuse<CategoryOverride>(fieldAt, $"'{field}' is stated twice in the entry for '{category}'. State it once.", category, field);
+            }
+
+            reader.Read();
+            ConfigLocation valueAt = At(utf8, reader.TokenStartIndex);
+            string written = Written(ref reader, utf8);
+            switch (field)
+            {
+                case Unit:
+                    QuantityUnit[] units = Enum.GetValues<QuantityUnit>();
+                    string? symbol = reader.TokenType == JsonTokenType.String ? reader.GetString() : null;
+                    QuantityUnit? named = units.Cast<QuantityUnit?>().FirstOrDefault(candidate => candidate!.Value.Symbol() == symbol);
+                    if (named is null)
+                    {
+                        return Refuse<CategoryOverride>(
+                            valueAt,
+                            $"'{written}' is not a unit for '{Unit}' in the entry for '{category}'. Accepted units: {string.Join(", ", units.Select(u => u.Symbol()))}.",
+                            category,
+                            written);
+                    }
+
+                    unit = named;
+                    break;
+
+                case Mode:
+                    if (reader.TokenType != JsonTokenType.String || !Modes.TryGetValue(reader.GetString()!, out BoundaryMode chosen))
+                    {
+                        return Refuse<CategoryOverride>(
+                            valueAt,
+                            $"'{written}' is not a boundary mode for '{Mode}' in the entry for '{category}'. Accepted values: {string.Join(", ", Modes.Keys)}.",
+                            category,
+                            written);
+                    }
+
+                    mode = chosen;
+                    break;
+
+                case Threshold:
+                    if (reader.TokenType != JsonTokenType.Number || !reader.TryGetDouble(out double value) || !double.IsFinite(value))
+                    {
+                        return Refuse<CategoryOverride>(
+                            valueAt,
+                            $"'{written}' is not a number for '{Threshold}' in the entry for '{category}'.",
+                            category,
+                            written);
+                    }
+
+                    threshold = value;
+                    break;
+
+                case Sources:
+                    Result<List<string>, ConfigError> listed = ReadSources(ref reader, utf8, category, valueAt);
+                    if (!listed.IsOk)
+                    {
+                        return Result<CategoryOverride, ConfigError>.Err(listed.Error);
+                    }
+
+                    sources = listed.Value;
+                    break;
+            }
+        }
+
+        return Result<CategoryOverride, ConfigError>.Ok(new CategoryOverride(category, unit, sources, threshold, mode));
+    }
+
+    /// <summary>An ordered list of source names; an empty list is a choice, never "left out".</summary>
+    private static Result<List<string>, ConfigError> ReadSources(ref Utf8JsonReader reader, byte[] utf8, string category, ConfigLocation listAt)
+    {
+        string must = $"'{Sources}' in the entry for '{category}' must be a list of source names, such as [\"HOST_AREA_COMPUTED\"].";
+        if (reader.TokenType != JsonTokenType.StartArray)
+        {
+            return Refuse<List<string>>(listAt, must, category, Written(ref reader, utf8));
+        }
+
+        List<string> sources = [];
+        while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
+        {
+            if (reader.TokenType != JsonTokenType.String || string.IsNullOrWhiteSpace(reader.GetString()))
+            {
+                return Refuse<List<string>>(At(utf8, reader.TokenStartIndex), must, category, Written(ref reader, utf8));
+            }
+
+            sources.Add(reader.GetString()!);
+        }
+
+        return Result<List<string>, ConfigError>.Ok(sources);
+    }
+
+    /// <summary>The value as the file wrote it, for naming it in a refusal.</summary>
+    private static string Written(ref Utf8JsonReader reader, byte[] utf8) =>
+        reader.TokenType == JsonTokenType.String
+            ? reader.GetString()!
+            : Encoding.UTF8.GetString(utf8, (int)reader.TokenStartIndex, reader.ValueSpan.Length);
+
+    /// <summary>The 1-based line and byte position of an offset, as an editor counts them.</summary>
+    private static ConfigLocation At(byte[] utf8, long offset)
+    {
+        int end = (int)Math.Min(offset, utf8.Length);
+        int lastNewline = Array.LastIndexOf(utf8, (byte)'\n', Math.Max(end - 1, 0), end);
+        int line = 1 + utf8.AsSpan(0, end).Count((byte)'\n');
+        return new ConfigLocation(line, end - lastNewline);
+    }
+
+    /// <summary>The reader's reason, without its own 0-based "LineNumber" and "BytePositionInLine".</summary>
+    private static string Reason(JsonException ex)
+    {
+        string message = ex.Message;
+        int cut = message.IndexOf(" LineNumber:", StringComparison.Ordinal);
+        return (cut >= 0 ? message[..cut] : message).Trim();
+    }
+
+    private static Result<T, ConfigError> Refuse<T>(ConfigLocation where, string message, string? category = null, string? invalid = null) =>
+        Result<T, ConfigError>.Err(new ConfigError(message)
+        {
+            Location = where,
+            Category = category,
+            InvalidValue = invalid,
+        });
+}
