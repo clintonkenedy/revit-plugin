@@ -56,7 +56,7 @@ public static class CompletionReport
             ? "No warnings."
             : string.Create(
                 CultureInfo.InvariantCulture,
-                $"{report.WarningCount} warnings: see the details below, and the full list kept in {WorkbookPath.WarningsFor(workbookPath)}"));
+                $"{report.WarningCount} {(report.WarningCount == 1 ? "warning" : "warnings")}: see the details below, and the full list kept in {WorkbookPath.WarningsFor(workbookPath)}"));
 
         string details = string.Join(
             Environment.NewLine,

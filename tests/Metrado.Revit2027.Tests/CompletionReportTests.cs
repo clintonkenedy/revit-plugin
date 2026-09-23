@@ -209,6 +209,18 @@ public sealed class CompletionReportTests
         Assert.Contains("element-2", text.Details);
     }
 
+    /// <summary>"The user is informed that fifteen warnings were raised" (task 3.4), and one warning is not called warnings.</summary>
+    [Theory]
+    [InlineData(15, "15 warnings: see the details below")]
+    [InlineData(1, "1 warning: see the details below")]
+    public void TheWarningsRaisedAreAnnouncedByTheirCount(int count, string wording)
+    {
+        string summary = CompletionReport.For(
+            Report(lines: 2, unclassified: 0, warnings: [.. Enumerable.Range(1, count).Select(index => $"condition {index}")]), Defaults(), Workbook).Summary;
+
+        Assert.Contains(wording, summary);
+    }
+
     [Fact]
     public void ARunWithoutWarningsSaysSoAndHasNoList()
     {
