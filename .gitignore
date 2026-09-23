@@ -2,6 +2,7 @@
 # Holds absolute paths that do not resolve on another checkout, and is
 # regenerable. Not project content.
 .atl/
+.codegraph/
 
 # .NET build output
 bin/
