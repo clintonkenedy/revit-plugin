@@ -44,4 +44,12 @@ public sealed record MetradoResult(
     Quantity Gross,
     BoundaryMode AppliedMode,
     double AppliedThreshold,
-    bool ClampedToGross);
+    bool ClampedToGross)
+{
+    /// <summary>
+    /// The unit <see cref="AppliedThreshold"/> is in: the measured unit for a
+    /// whole element, but m2 for a layer line in m3, whose openings the host
+    /// decided by area.
+    /// </summary>
+    public QuantityUnit AppliedThresholdUnit { get; init; } = Raw.Unit;
+}

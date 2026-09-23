@@ -250,7 +250,10 @@ public static class Measurement
             new Quantity(gross, raw.Unit),
             threshold.Mode,
             threshold.Value,
-            ClampedToGross: !boundHolds);
+            ClampedToGross: !boundHolds)
+        {
+            AppliedThresholdUnit = threshold.Unit,
+        };
 
         return new MetradoOutcome(
             MetradoStatus.Measured,

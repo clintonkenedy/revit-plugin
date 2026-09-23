@@ -20,7 +20,12 @@ namespace Metrado.Domain;
 /// What the measurement rule produced, including the boundary mode and threshold
 /// it actually applied.
 /// </param>
-public sealed record Linea(ElementTakeoff Element, string PartidaCode, MetradoResult Metrado)
+/// <param name="Layer">
+/// The material this line measures, and the layers it covers, when the
+/// element is taken off by material layer (I3); null for a whole element. The
+/// host's <c>UniqueId</c> stays the line's anchor either way.
+/// </param>
+public sealed record Linea(ElementTakeoff Element, string PartidaCode, MetradoResult Metrado, MaterialLayers? Layer = null)
 {
     /// <summary>
     /// The partida this line belongs to: its category as capitulo, plus the

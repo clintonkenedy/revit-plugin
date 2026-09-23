@@ -48,6 +48,12 @@ public sealed record RunReport(
     /// </remarks>
     public bool NoMeasurableElements => ExportedLines == 0;
 
+    /// <summary>
+    /// How many elements the unclassified lines belong to. A layered element
+    /// gives a line per material, so lines and elements are counted apart.
+    /// </summary>
+    public int UnclassifiedElements { get; init; }
+
     /// <summary>How many warnings the run raised.</summary>
     /// <remarks>
     /// Derived rather than stored. A count carried alongside the list it counts is
@@ -70,7 +76,15 @@ public sealed record RunReport(
                 .Where(partida => partida.IsUnclassified)
                 .Sum(partida => partida.Lineas.Count),
             Applied: AppliedConventions(partidas),
-            Warnings: [.. Guard.RequiredValue(warnings, nameof(warnings)), .. result.Warnings]);
+            Warnings: [.. Guard.RequiredValue(warnings, nameof(warnings)), .. result.Warnings])
+        {
+            UnclassifiedElements = partidas
+                .Where(partida => partida.IsUnclassified)
+                .SelectMany(partida => partida.Lineas)
+                .Select(linea => linea.Element.UniqueId)
+                .Distinct(StringComparer.Ordinal)
+                .Count(),
+        };
     }
 
     /// <summary>
@@ -109,7 +123,10 @@ public sealed record RunReport(
                 capitulo.Capitulo,
                 capitulo.Unit,
                 linea.Metrado.AppliedThreshold,
-                linea.Metrado.AppliedMode);
+                linea.Metrado.AppliedMode)
+            {
+                ThresholdUnit = linea.Metrado.AppliedThresholdUnit,
+            };
 
             if (byCapitulo.TryGetValue(capitulo, out AppliedCriterion? already))
             {

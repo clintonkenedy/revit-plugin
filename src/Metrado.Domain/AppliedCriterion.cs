@@ -24,4 +24,8 @@ public sealed record AppliedCriterion(
     string Capitulo,
     QuantityUnit Unit,
     double Threshold,
-    BoundaryMode Mode);
+    BoundaryMode Mode)
+{
+    /// <summary>The unit <see cref="Threshold"/> is in, which for a capitulo of layer lines in m3 is still m2.</summary>
+    public QuantityUnit ThresholdUnit { get; init; } = Unit;
+}

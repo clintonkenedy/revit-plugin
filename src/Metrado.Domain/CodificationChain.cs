@@ -60,6 +60,14 @@ public sealed class CodificationChain
     /// nobody supplied would make a wiring bug look exactly like a correct run while
     /// sending the whole model to the unclassified block.
     /// </exception>
+    /// <summary>
+    /// The code of a layer line: the same links, in the same order, over the
+    /// material's own codes rather than the host's. A partida is one priced
+    /// item, and a wall is several; a material with no code is unclassified.
+    /// </summary>
+    public string ResolveLayer(ElementTakeoff host, MaterialRef material) =>
+        Resolve(Guard.RequiredValue(host, nameof(host)) with { Codes = Guard.RequiredValue(material, nameof(material)).Codes });
+
     public string Resolve(ElementTakeoff element)
     {
         foreach (ICodeResolver link in _links)
