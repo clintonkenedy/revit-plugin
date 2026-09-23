@@ -143,6 +143,19 @@ public sealed class CompletionReportTests
             summary);
     }
 
+    /// <summary>One function in m3, as the host runs had it, is named alone; any function can be.</summary>
+    [Theory]
+    [InlineData(LayerFunction.Structure, "every function in m2 except Structure in m3;")]
+    [InlineData(LayerFunction.Finish1, "every function in m2 except Finish1 in m3;")]
+    [InlineData(LayerFunction.StructuralDeck, "every function in m2 except StructuralDeck in m3;")]
+    public void OneFunctionInM3IsNamedAlone(LayerFunction function, string wording)
+    {
+        string summary = CompletionReport.For(Report(lines: 1, unclassified: 0), Layered("Walls", function), Workbook).Summary;
+
+        Assert.Contains(wording, summary);
+        Assert.Contains("and each m3 line keeping Revit's deduction", summary);
+    }
+
     /// <summary>With every function in m2 no line keeps a deduction by volume; with every opening deducted there is nothing to give back.</summary>
     [Fact]
     public void ALayeredCriterionSaysOnlyWhatApplies()

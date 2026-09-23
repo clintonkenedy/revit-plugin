@@ -139,13 +139,20 @@ public static class TakeoffExport
             return null;
         }
 
+        // Counted from 1 among the layers alone: Revit's Edit Assembly also
+        // numbers its core boundaries, so its row numbers are not these.
+        List<string> named =
+        [
+            .. borrowed.Select(entry => string.Format(CultureInfo.InvariantCulture, "{0} ({1}, {2:0.###} mm)", entry.Layer.Position + 1, entry.Layer.Function, entry.Layer.Width.Value * 1000)),
+        ];
         return ValidationWarning.ForElement(
             element,
             string.Format(
                 CultureInfo.InvariantCulture,
-                "Its type gives {0} no material of its own, so {1} measured as the category's material, {2}. "
-                    + "Assign {3} one in the type, so {4} coded and priced as what it is. Said once for the type.",
-                string.Join(", ", borrowed.Select(entry => string.Format(CultureInfo.InvariantCulture, "layer {0} ({1}, {2:0.###} mm)", entry.Layer.Position, entry.Layer.Function, entry.Layer.Width.Value * 1000))),
+                "Its type gives {0} from the exterior (or top) no material of {1}, so {2} measured as the category's material, {3}. "
+                    + "Assign {4} one in the type, so {5} coded and priced as what it is. Said once for the type.",
+                named.Count == 1 ? $"its layer {named[0]}" : $"its layers {string.Join(", ", named.Take(named.Count - 1))} and {named[^1]}",
+                borrowed.Count == 1 ? "its own" : "their own",
                 borrowed.Count == 1 ? "it is" : "they are",
                 string.Join(", ", borrowed.Select(entry => entry.Material).Distinct(StringComparer.Ordinal)),
                 borrowed.Count == 1 ? "it" : "each",
