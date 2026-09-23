@@ -60,6 +60,10 @@
     never from a spelled-out bin path: under another configuration or a
     redirected output (artifacts path) that path holds a stale file, and the
     suite would pin the closure against it.
+
+    The copy is registered in FileWrites. Unregistered, IncrementalClean
+    deletes it right after it is made whenever an earlier build listed the
+    same file as its own output, and the suite fails once on a missing file.
   -->
   <Target Name="CopyAddInDependencyManifest" AfterTargets="CopyFilesToOutputDirectory">
     <ItemGroup>
@@ -67,7 +71,9 @@
       <_AddInDependencyManifest Include="@(_AddInAssembly->'%(RootDir)%(Directory)%(Filename).deps.json')" />
     </ItemGroup>
     <Error Condition="'@(_AddInDependencyManifest)' == '' Or !Exists('@(_AddInDependencyManifest)')" Text="Metrado.Revit2027.deps.json was not found beside the resolved add-in assembly '@(_AddInAssembly)'." />
-    <Copy SourceFiles="@(_AddInDependencyManifest)" DestinationFolder="$(OutDir)AddIn" />
+    <Copy SourceFiles="@(_AddInDependencyManifest)" DestinationFolder="$(OutDir)AddIn">
+      <Output TaskParameter="DestinationFiles" ItemName="FileWrites" />
+    </Copy>
   </Target>
 
   <ItemGroup>
