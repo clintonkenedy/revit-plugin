@@ -43,20 +43,56 @@ public sealed class LayerRowsTests
         Assert.Equal(3, wall.Select(row => Text(sheet, row, "Material")).Distinct().Count());
     }
 
-    /// <summary>Two lines of one host in one partida come exterior first, whatever order they arrive in.</summary>
+    /// <summary>
+    /// Two lines of one host in one partida come exterior first, whatever
+    /// order they arrive in: the exterior plaster here is the wider and sorts
+    /// last by name, so neither order passes for the layers'.
+    /// </summary>
     [Fact]
     public void LinesOfOneHostComeExteriorFirst()
     {
-        Linea exterior = TakeoffFixture.LayerLine("walls-03", "02.04.01", 13.11, "Tarrajeo frotachado 1:5", (LayerFunction.Finish1, 0.015));
-        Linea interior = TakeoffFixture.LayerLine("walls-03", "02.04.01", 13.11, "Tarrajeo impermeabilizado 1:4", (LayerFunction.Finish2, 0.020)) with
-        {
-            Layer = new MaterialLayers(new MaterialRef("m-inner", "Tarrajeo impermeabilizado 1:4"), [new CompoundLayer(2, LayerFunction.Finish2, new Quantity(0.020, QuantityUnit.Metre), "m-inner")]),
-        };
+        Linea exterior = TakeoffFixture.LayerLine("walls-03", "02.04.01", 13.11, "Tarrajeo impermeabilizado 1:4", (LayerFunction.Finish1, 0.020));
+        Linea interior = TakeoffFixture.LayerLine("walls-03", "02.04.01", 13.11, "Tarrajeo frotachado 1:5", (LayerFunction.Finish2, 0.015));
 
         using XLWorkbook workbook = WrittenWorkbook.Of(TakeoffFixture.ResultOf(interior, exterior));
         IXLWorksheet sheet = workbook.Worksheet(Budget);
 
-        Assert.Equal(["Tarrajeo frotachado 1:5", "Tarrajeo impermeabilizado 1:4"], Lines(sheet).Select(row => Text(sheet, row, "Material")));
+        Assert.Equal(["Tarrajeo impermeabilizado 1:4", "Tarrajeo frotachado 1:5"], Lines(sheet).Select(row => Text(sheet, row, "Material")));
+    }
+
+    /// <summary>
+    /// A material on both faces comes where it first appears, before one on a
+    /// layer between them: its first layer decides, not its last.
+    /// </summary>
+    [Fact]
+    public void AMaterialOnBothFacesComesWhereItFirstAppears()
+    {
+        Linea both = TakeoffFixture.LayerLine("walls-09", "02.04.01", 26.22, "Tarrajeo frotachado 1:5", (LayerFunction.Finish1, 0.015), (LayerFunction.Finish2, 0.015));
+        Linea between = TakeoffFixture.LayerLine("walls-09", "02.04.01", 13.11, "Empaste", (LayerFunction.Substrate, 0.002));
+
+        using XLWorkbook workbook = WrittenWorkbook.Of(TakeoffFixture.ResultOf(between, both));
+        IXLWorksheet sheet = workbook.Worksheet(Budget);
+
+        Assert.Equal(["Tarrajeo frotachado 1:5", "Empaste"], Lines(sheet).Select(row => Text(sheet, row, "Material")));
+    }
+
+    /// <summary>A material's layers are written in its type's order, which a flipped type makes neither by function nor by width.</summary>
+    [Fact]
+    public void TheLayersTextFollowsTheTypesOrder()
+    {
+        Linea line = TakeoffFixture.LayerLine("walls-08", "02.04.01", 26.22, "Tarrajeo frotachado 1:5", (LayerFunction.Finish1, 0.015));
+        string id = line.Layer!.Material.MaterialId;
+        line = line with
+        {
+            Layer = new MaterialLayers(
+                line.Layer.Material,
+                [new CompoundLayer(0, LayerFunction.Finish2, new Quantity(0.020, QuantityUnit.Metre), id), new CompoundLayer(5, LayerFunction.Finish1, new Quantity(0.015, QuantityUnit.Metre), id)]),
+        };
+
+        using XLWorkbook workbook = WrittenWorkbook.Of(TakeoffFixture.ResultOf(line));
+        IXLWorksheet sheet = workbook.Worksheet(Budget);
+
+        Assert.Equal("Finish2 20 mm + Finish1 15 mm", Text(sheet, Lines(sheet).Single(), "Layers"));
     }
 
     [Fact]
@@ -84,6 +120,19 @@ public sealed class LayerRowsTests
         Assert.Equal("Metal Stud Layer", WrittenWorkbook.Text(sheet, 3, row, "Material"));
     }
 
+    /// <summary>One element with two uncoded materials is two lines to key, and the sheet counts the lines it lists.</summary>
+    [Fact]
+    public void TheUnclassifiedSheetCountsTheLinesItLists()
+    {
+        using XLWorkbook workbook = WrittenWorkbook.Of(TakeoffFixture.ResultOf(
+            TakeoffFixture.LayerLine("walls-04", UnclassifiedResolver.Code, 9.5, "Air", (LayerFunction.Insulation, 0.020)),
+            TakeoffFixture.LayerLine("walls-04", UnclassifiedResolver.Code, 9.5, "Sheathing", (LayerFunction.Substrate, 0.025))));
+        IXLWorksheet sheet = workbook.Worksheet("Unclassified");
+
+        Assert.Equal(("Unclassified lines", 2), (sheet.Cell(1, 1).GetString(), sheet.Cell(2, 2).GetValue<int>()));
+        Assert.Equal(["Sheathing", "Air"], WrittenWorkbook.BodyRows(sheet, headerRow: 3).Select(row => WrittenWorkbook.Text(sheet, 3, row, "Material")));
+    }
+
     /// <summary>A machine set to a decimal comma (es-ES; es-PE already writes a point) writes the same Layers text.</summary>
     [Fact]
     public void TheLayersTextIsTheSameUnderADecimalCommaCulture()
@@ -104,18 +153,20 @@ public sealed class LayerRowsTests
         }
     }
 
-    /// <summary>A layer given the category's material says so, and the line count counts layer lines.</summary>
+    /// <summary>A layer given the category's material says so, and the line count counts layer lines, not elements.</summary>
     [Fact]
     public void TheCategorysMaterialIsNamedAndLayerLinesAreCounted()
     {
         Linea line = TakeoffFixture.LayerLine("walls-06", "02.01.01", 12.0, "Default Wall", (LayerFunction.Structure, 0.2));
         line = line with { Layer = new MaterialLayers(line.Layer!.Material, [new CompoundLayer(0, LayerFunction.Structure, new Quantity(0.2, QuantityUnit.Metre), line.Layer.Material.MaterialId, materialFromCategory: true)]) };
 
-        using XLWorkbook workbook = WrittenWorkbook.Of(TakeoffFixture.ResultOf(line, TakeoffFixture.Line("walls-07", "02.01.01")));
+        Linea plaster = TakeoffFixture.LayerLine("walls-06", "02.01.01", 12.0, "Tarrajeo frotachado 1:5", (LayerFunction.Finish2, 0.015));
+
+        using XLWorkbook workbook = WrittenWorkbook.Of(TakeoffFixture.ResultOf(line, plaster, TakeoffFixture.Line("walls-07", "02.01.01")));
         IXLWorksheet sheet = workbook.Worksheet(Budget);
 
         Assert.Equal("Structure 200 mm (category material)", Text(sheet, Lines(sheet).First(row => Text(sheet, row, "UniqueId") == "walls-06"), "Layers"));
-        Assert.Equal(2, sheet.Cell(1, 2).GetValue<int>());
+        Assert.Equal(3, sheet.Cell(1, 2).GetValue<int>());
     }
 
     private static IEnumerable<int> Lines(IXLWorksheet sheet) =>

@@ -186,11 +186,12 @@ public static class TakeoffWorkbook
     };
 
     /// <summary>
-    /// Writes the uncoded elements, whether or not there are any.
+    /// Writes the uncoded lines, whether or not there are any: one per whole
+    /// element, one per material of a layered one, each a thing to key.
     /// </summary>
     /// <remarks>
     /// The label, the count and the column headers are written unconditionally, so
-    /// a run where everything resolved to a code still states that zero elements
+    /// a run where everything resolved to a code still states that zero lines
     /// were left uncoded. Omitting the block when it is empty would leave the
     /// reader unable to tell "nothing was uncoded" from "this export never looked",
     /// and those are different facts about the model.
@@ -199,7 +200,7 @@ public static class TakeoffWorkbook
     {
         IReadOnlyList<Linea> uncoded = Uncoded(result);
 
-        sheet.Cell(UnclassifiedLabelRow, EntryUniqueIdColumn).Value = "Unclassified elements";
+        sheet.Cell(UnclassifiedLabelRow, EntryUniqueIdColumn).Value = "Unclassified lines";
         sheet.Cell(UnclassifiedCountRow, EntryUniqueIdColumn).Value = "Count";
         sheet.Cell(UnclassifiedCountRow, EntryCategoryColumn).Value = uncoded.Count;
 
