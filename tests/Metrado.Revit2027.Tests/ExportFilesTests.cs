@@ -7,7 +7,8 @@ namespace Metrado.Revit2027.Tests;
 /// the workbook by hand, so a name there holds a complete export or nothing:
 /// each file is written under a temporary name in the same folder and renamed
 /// into place only when complete, never onto a file already there, and an
-/// export that fails leaves nothing behind.
+/// export that fails leaves nothing behind (save one empty file in a folder
+/// that lets no one delete it).
 /// </summary>
 public sealed class ExportFilesTests : IDisposable
 {
@@ -111,6 +112,65 @@ public sealed class ExportFilesTests : IDisposable
         }
 
         Assert.Empty(Files());
+    }
+
+    /// <summary>
+    /// A write that fails for good (a full disk, a share's quota) leaves
+    /// bytes the stream will try again to write when it closes, and fail
+    /// again. The reservation still goes. A lock taken by another handle
+    /// stands in for the full disk: the same write keeps failing.
+    /// </summary>
+    [Fact]
+    public void AWriteThatKeepsFailingStillLeavesNothingBehind()
+    {
+        ExportFiles files = ExportFiles.Reserve(Workbook);
+        files.Workbook.Write(new byte[100]);
+        string reserved = Assert.Single(Files());
+
+        using (FileStream other = new(reserved, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+        {
+            other.Lock(0, 1 << 20);
+            files.Dispose();
+            other.Unlock(0, 1 << 20);
+        }
+
+        Assert.Empty(Files());
+    }
+
+    /// <summary>
+    /// The commit is a rename, which deletes the temporary name. A folder
+    /// that lets files be created but not deleted must stop the export at
+    /// the reservation, before the long read, not at the commit after it.
+    /// It keeps at most one empty file, which it lets no one remove.
+    /// </summary>
+    [Fact]
+    public void AFolderThatRefusesDeletionFailsAtTheReservation()
+    {
+        using (Acl.Deny(
+            _project.FullName,
+            new DeniedRight(FileSystemRights.DeleteSubdirectoriesAndFiles),
+            new DeniedRight(FileSystemRights.Delete, InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly)))
+        {
+            Assert.Throws<UnauthorizedAccessException>(() => ExportFiles.Reserve(Workbook));
+            Assert.InRange(Files().Length, 0, 1);
+            Assert.All(Files(), left => Assert.Equal(0, new FileInfo(left).Length));
+        }
+    }
+
+    /// <summary>A model's name is the workbook's; a '$' in it is text, never a substitution.</summary>
+    [Theory]
+    [InlineData("Lote $0")]
+    [InlineData("US$'s bank")]
+    [InlineData("A $_ B")]
+    public void AnExplanationKeepsAWorkbookNameWithDollarSignsAsItIs(string model)
+    {
+        string workbook = Path.Combine(_project.FullName, $"{model} - metrado 2026-09-23 1430.xlsx");
+        IOException failure = new($"Access to the path '{Path.Combine(_project.FullName, "~metrado-0123456789abcdef0123456789abcdef.partial")}' is denied.");
+
+        string explained = ExportFiles.Explain(workbook, failure);
+
+        Assert.Contains($"'{workbook}'", explained);
+        Assert.DoesNotContain("~metrado-", explained);
     }
 
     /// <summary>

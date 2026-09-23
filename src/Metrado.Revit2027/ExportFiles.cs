@@ -8,7 +8,9 @@ namespace Metrado.Revit2027;
 /// the same folder and renamed into place only when complete, never onto a
 /// file already there: an estimator prices the workbook by hand, and a
 /// half-written or replaced copy would cost them that work. An export
-/// abandoned before its commit leaves nothing behind. Uses no Revit type.
+/// abandoned before its commit leaves nothing behind, save in a folder that
+/// lets files be created but not deleted (see <see cref="Reserve"/>). Uses
+/// no Revit type.
 /// </summary>
 public sealed partial class ExportFiles : IDisposable
 {
@@ -29,16 +31,33 @@ public sealed partial class ExportFiles : IDisposable
 
     /// <summary>
     /// Takes a temporary file in the workbook's folder now, before the model
-    /// is read, so a folder that refuses writes stops the export at once.
+    /// is read, and renames it once, so a folder that refuses what the commit
+    /// will need stops the export at once rather than after the long read:
+    /// creating a file, and renaming it, which deletes its old name. A folder
+    /// that lets files be created but not deleted keeps that one empty file,
+    /// which it lets no one remove.
     /// </summary>
     /// <exception cref="IOException">The folder is missing or cannot be reached.</exception>
-    /// <exception cref="UnauthorizedAccessException">The folder refuses new files.</exception>
+    /// <exception cref="UnauthorizedAccessException">The folder refuses new files, or refuses renaming them.</exception>
     public static ExportFiles Reserve(string workbookPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workbookPath);
 
+        string created = TemporaryBeside(workbookPath);
+        new FileStream(created, FileMode.CreateNew, FileAccess.Write).Dispose();
+
         string temp = TemporaryBeside(workbookPath);
-        return new ExportFiles(workbookPath, temp, new FileStream(temp, FileMode.CreateNew, FileAccess.ReadWrite));
+        try
+        {
+            File.Move(created, temp, overwrite: false);
+            return new ExportFiles(workbookPath, temp, new FileStream(temp, FileMode.Open, FileAccess.ReadWrite));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Discard(created);
+            Discard(temp);
+            throw;
+        }
     }
 
     /// <summary>
@@ -51,16 +70,22 @@ public sealed partial class ExportFiles : IDisposable
     /// <exception cref="IOException">A file took either name meanwhile, or the disk refused the content.</exception>
     public string? Commit(string? warnings)
     {
-        // Closing flushes: a full disk fails here, before any name is taken.
+        // Through to the disk before any name is taken: the rename is
+        // journaled and the data is not, so after a power loss the name could
+        // otherwise hold an empty file. A full disk fails here too.
+        _workbook.Flush(flushToDisk: true);
         _workbook.Dispose();
 
         string? warningsPath = null;
         if (warnings is not null)
         {
             _warningsTemp = TemporaryBeside(_workbookPath);
-            using (StreamWriter writer = new(new FileStream(_warningsTemp, FileMode.CreateNew, FileAccess.Write)))
+            using (FileStream stream = new(_warningsTemp, FileMode.CreateNew, FileAccess.Write))
+            using (StreamWriter writer = new(stream))
             {
                 writer.Write(warnings);
+                writer.Flush();
+                stream.Flush(flushToDisk: true);
             }
 
             warningsPath = WorkbookPath.WarningsFor(_workbookPath);
@@ -74,10 +99,11 @@ public sealed partial class ExportFiles : IDisposable
         }
         catch
         {
-            // The list describes a workbook that never arrived.
+            // The list describes a workbook that never arrived. Failing to
+            // withdraw it must not replace the reason the workbook failed.
             if (warningsPath is not null)
             {
-                File.Delete(warningsPath);
+                Discard(warningsPath);
             }
 
             throw;
@@ -88,8 +114,17 @@ public sealed partial class ExportFiles : IDisposable
 
     public void Dispose()
     {
-        // After a commit the temporary names are gone and this finds nothing.
-        _workbook.Dispose();
+        // A write that failed for good (a full disk) fails again as the
+        // stream closes; the reservation goes all the same. After a commit
+        // the temporary names are gone and this finds nothing.
+        try
+        {
+            _workbook.Dispose();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
+
         Discard(_workbookTemp);
 
         if (_warningsTemp is not null)
@@ -107,7 +142,10 @@ public sealed partial class ExportFiles : IDisposable
     {
         ArgumentNullException.ThrowIfNull(failure);
 
-        string reason = Temporary().Replace(failure.Message, Path.GetFileName(workbookPath));
+        // An evaluator, not a replacement pattern: the name is the model's,
+        // and a '$' in it is text.
+        string name = Path.GetFileName(workbookPath);
+        string reason = Temporary().Replace(failure.Message, _ => name);
         return $"No workbook was written to {Path.GetDirectoryName(workbookPath)}. {reason}";
     }
 
