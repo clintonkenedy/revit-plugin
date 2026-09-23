@@ -30,12 +30,20 @@ public static class WorkbookPath
             CultureInfo.InvariantCulture,
             $"{Path.GetFileNameWithoutExtension(modelPath)} - metrado {now:yyyy-MM-dd HHmm}");
 
+        // A name is free only if its warnings list is free too: the pair is
+        // never split across two exports.
         string candidate = Path.Combine(folder, stem + ".xlsx");
-        for (int copy = 2; exists(candidate); copy++)
+        for (int copy = 2; exists(candidate) || exists(WarningsFor(candidate)); copy++)
         {
             candidate = Path.Combine(folder, string.Create(CultureInfo.InvariantCulture, $"{stem} ({copy}).xlsx"));
         }
 
         return candidate;
     }
+
+    /// <summary>Where a workbook's warnings list goes: beside it, under its name.</summary>
+    public static string WarningsFor(string workbookPath) =>
+        Path.Combine(
+            Path.GetDirectoryName(workbookPath) ?? string.Empty,
+            Path.GetFileNameWithoutExtension(workbookPath) + " - warnings.txt");
 }

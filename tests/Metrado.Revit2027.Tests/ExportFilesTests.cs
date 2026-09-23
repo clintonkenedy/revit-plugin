@@ -1,0 +1,123 @@
+using System.Security.AccessControl;
+
+namespace Metrado.Revit2027.Tests;
+
+/// <summary>
+/// Pins how an export's files reach the model's folder. An estimator prices
+/// the workbook by hand, so a name there holds a complete export or nothing:
+/// each file is written under a temporary name in the same folder and renamed
+/// into place only when complete, never onto a file already there, and an
+/// export that fails leaves nothing behind.
+/// </summary>
+public sealed class ExportFilesTests : IDisposable
+{
+    private readonly DirectoryInfo _project = Directory.CreateTempSubdirectory("metrado-project-");
+
+    public void Dispose() => _project.Delete(recursive: true);
+
+    private string Workbook => Path.Combine(_project.FullName, "Office Building - metrado 2026-09-23 1430.xlsx");
+
+    private string Warnings => WorkbookPath.WarningsFor(Workbook);
+
+    [Fact]
+    public void TheWorkbookReachesItsNameOnlyWhenCommitted()
+    {
+        using ExportFiles files = ExportFiles.Reserve(Workbook);
+        files.Workbook.Write([1, 2, 3]);
+
+        Assert.False(File.Exists(Workbook));
+        Assert.Null(files.Commit(warnings: null));
+
+        Assert.Equal([1, 2, 3], File.ReadAllBytes(Workbook));
+        Assert.Equal([Workbook], Files());
+    }
+
+    /// <summary>
+    /// The reservation is a file in the model's own folder, so the commit is
+    /// a rename there, and an export that stops short of it (the model read
+    /// failed, the workbook writer threw) takes the reservation with it.
+    /// </summary>
+    [Fact]
+    public void AnExportAbandonedBeforeItsCommitLeavesNothing()
+    {
+        using (ExportFiles files = ExportFiles.Reserve(Workbook))
+        {
+            files.Workbook.Write([1, 2, 3]);
+
+            string reserved = Assert.Single(Files());
+            Assert.NotEqual(Workbook, reserved);
+        }
+
+        Assert.Empty(Files());
+    }
+
+    [Fact]
+    public void TheWarningsListIsWrittenBesideTheWorkbook()
+    {
+        using ExportFiles files = ExportFiles.Reserve(Workbook);
+
+        string? written = files.Commit("- Walls w1 (Generic): Opening 7 could not be measured.");
+
+        Assert.Equal(Warnings, written);
+        Assert.Equal("- Walls w1 (Generic): Opening 7 could not be measured.", File.ReadAllText(Warnings));
+        Assert.Equal([Warnings, Workbook], Files());
+    }
+
+    /// <summary>
+    /// The name was free when chosen; if a file took it since, the commit
+    /// fails rather than replace it, and the warnings list written for the
+    /// workbook that never arrived is withdrawn with it.
+    /// </summary>
+    [Fact]
+    public void AFileThatTookTheWorkbooksNameMeanwhileIsNeverReplaced()
+    {
+        using (ExportFiles files = ExportFiles.Reserve(Workbook))
+        {
+            files.Workbook.Write([1, 2, 3]);
+            File.WriteAllText(Workbook, "priced by hand");
+
+            Assert.Throws<IOException>(() => files.Commit("- a warning"));
+        }
+
+        Assert.Equal("priced by hand", File.ReadAllText(Workbook));
+        Assert.Equal([Workbook], Files());
+    }
+
+    [Fact]
+    public void AFileThatTookTheWarningsNameMeanwhileIsNeverReplaced()
+    {
+        using (ExportFiles files = ExportFiles.Reserve(Workbook))
+        {
+            File.WriteAllText(Warnings, "someone's notes");
+
+            Assert.Throws<IOException>(() => files.Commit("- a warning"));
+        }
+
+        Assert.Equal("someone's notes", File.ReadAllText(Warnings));
+        Assert.Equal([Warnings], Files());
+    }
+
+    /// <summary>
+    /// The reservation touches the disk at once, so the command, which
+    /// reserves before it reads the model, learns of a refusing folder before
+    /// the long read rather than after it.
+    /// </summary>
+    [Fact]
+    public void AFolderThatRefusesWritesFailsAtTheReservation()
+    {
+        using (Acl.Deny(_project.FullName, FileSystemRights.CreateFiles))
+        {
+            Assert.Throws<UnauthorizedAccessException>(() => ExportFiles.Reserve(Workbook));
+        }
+
+        Assert.Empty(Files());
+    }
+
+    [Fact]
+    public void AFolderThatIsGoneFailsAtTheReservation()
+    {
+        Assert.Throws<DirectoryNotFoundException>(() => ExportFiles.Reserve(Path.Combine(_project.FullName, "gone", "Office.xlsx")));
+    }
+
+    private string[] Files() => [.. Directory.GetFiles(_project.FullName).Order(StringComparer.Ordinal)];
+}

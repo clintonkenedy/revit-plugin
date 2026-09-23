@@ -32,6 +32,23 @@ public sealed class WorkbookPathTests
         Assert.Equal(@"C:\Projects\Office\Office Building - metrado 2026-09-23 1430 (3).xlsx", WorkbookPath.For(Model, Noon, taken.Contains));
     }
 
+    [Fact]
+    public void TheWarningsListIsNamedForItsWorkbook()
+    {
+        Assert.Equal(
+            @"C:\Projects\Office\Office Building - metrado 2026-09-23 1430 (2) - warnings.txt",
+            WorkbookPath.WarningsFor(@"C:\Projects\Office\Office Building - metrado 2026-09-23 1430 (2).xlsx"));
+    }
+
+    /// <summary>A warnings list left without its workbook still holds the name: the pair is never split across two exports.</summary>
+    [Fact]
+    public void ALeftoverWarningsListAlsoTakesTheName()
+    {
+        HashSet<string> taken = [@"C:\Projects\Office\Office Building - metrado 2026-09-23 1430 - warnings.txt"];
+
+        Assert.Equal(@"C:\Projects\Office\Office Building - metrado 2026-09-23 1430 (2).xlsx", WorkbookPath.For(Model, Noon, taken.Contains));
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]
