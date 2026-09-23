@@ -34,7 +34,11 @@ public static class CriteriaFile
     private const string Threshold = "threshold";
     private const string Mode = "mode";
 
-    private static readonly string[] Fields = [Unit, Sources, Threshold, Mode];
+    private const string Layers = "layers";
+
+    private static readonly string[] Fields = [Unit, Sources, Threshold, Mode, Layers];
+
+    private static readonly LayerFunction[] Functions = Enum.GetValues<LayerFunction>();
 
     private static readonly Dictionary<string, BoundaryMode> Modes = new(StringComparer.Ordinal)
     {
@@ -132,6 +136,7 @@ public static class CriteriaFile
         List<string>? sources = null;
         double? threshold = null;
         BoundaryMode? mode = null;
+        LayerOverride? layers = null;
         HashSet<string> stated = new(StringComparer.Ordinal);
 
         while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
@@ -208,10 +213,95 @@ public static class CriteriaFile
 
                     sources = listed.Value;
                     break;
+
+                case Layers:
+                    Result<LayerOverride, ConfigError> read = ReadLayers(ref reader, utf8, category, valueAt, written);
+                    if (!read.IsOk)
+                    {
+                        return Result<CategoryOverride, ConfigError>.Err(read.Error);
+                    }
+
+                    layers = read.Value;
+                    break;
             }
         }
 
-        return Result<CategoryOverride, ConfigError>.Ok(new CategoryOverride(category, unit, sources, threshold, mode));
+        return Result<CategoryOverride, ConfigError>.Ok(new CategoryOverride(category, unit, sources, threshold, mode, layers));
+    }
+
+    /// <summary>
+    /// A category's material layers: <c>true</c> (every function in m2), an
+    /// object of layer functions and units (<c>{}</c> is the same as true), or
+    /// <c>false</c>. A function is named as Revit names it; a unit is m2 or m3;
+    /// a membrane has no thickness, so it is always m2.
+    /// </summary>
+    private static Result<LayerOverride, ConfigError> ReadLayers(ref Utf8JsonReader reader, byte[] utf8, string category, ConfigLocation valueAt, string written)
+    {
+        switch (reader.TokenType)
+        {
+            case JsonTokenType.True:
+                return Result<LayerOverride, ConfigError>.Ok(LayerOverride.On(new Dictionary<LayerFunction, QuantityUnit>()));
+            case JsonTokenType.False:
+                return Result<LayerOverride, ConfigError>.Ok(LayerOverride.Off);
+            case JsonTokenType.StartObject:
+                break;
+            default:
+                return Refuse<LayerOverride>(
+                    valueAt,
+                    $"'{Layers}' in the entry for '{category}' must be true, false or an object of layer functions and units, such as {{ \"Structure\": \"m3\" }}.",
+                    category,
+                    written);
+        }
+
+        Dictionary<LayerFunction, QuantityUnit> units = [];
+        while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+        {
+            ConfigLocation nameAt = At(utf8, reader.TokenStartIndex);
+            string name = reader.GetString()!;
+            LayerFunction? function = Functions.Cast<LayerFunction?>().FirstOrDefault(candidate => candidate!.Value.ToString() == name);
+            if (function is null)
+            {
+                return Refuse<LayerOverride>(
+                    nameAt,
+                    $"'{name}' is not a layer function in the layers of '{category}'. Layer functions: {string.Join(", ", Functions)}.",
+                    category,
+                    name);
+            }
+
+            if (units.ContainsKey(function.Value))
+            {
+                return Refuse<LayerOverride>(nameAt, $"'{name}' is stated twice in the layers of '{category}'. State it once.", category, name);
+            }
+
+            reader.Read();
+            ConfigLocation unitAt = At(utf8, reader.TokenStartIndex);
+            string symbol = Written(ref reader, utf8);
+            // Written as the file wrote it: a number or a literal can never spell "m2".
+            QuantityUnit? unit = symbol == QuantityUnit.SquareMetre.Symbol() ? QuantityUnit.SquareMetre
+                : symbol == QuantityUnit.CubicMetre.Symbol() ? QuantityUnit.CubicMetre
+                : null;
+            if (unit is null)
+            {
+                return Refuse<LayerOverride>(
+                    unitAt,
+                    $"'{symbol}' is not a unit for the {name} layers of '{category}': a layer is measured in m2 or m3.",
+                    category,
+                    symbol);
+            }
+
+            if (function == LayerFunction.Membrane && unit == QuantityUnit.CubicMetre)
+            {
+                return Refuse<LayerOverride>(
+                    unitAt,
+                    $"The Membrane layers of '{category}' have no thickness, so their volume is always 0: they are measured in m2.",
+                    category,
+                    symbol);
+            }
+
+            units.Add(function.Value, unit.Value);
+        }
+
+        return Result<LayerOverride, ConfigError>.Ok(LayerOverride.On(units));
     }
 
     /// <summary>An ordered list of source names; an empty list is a choice, never "left out".</summary>
