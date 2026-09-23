@@ -28,11 +28,11 @@ public static class ExtractionService
         List<ValidationWarning> warnings = [];
         List<string> reasons = [];
 
-        foreach (WallReading reading in WallReader.ReadAll(document, sharedParameter))
+        foreach (HostReading reading in WallReader.ReadAll(document, sharedParameter))
         {
-            ElementTakeoff takeoff = WallTakeoff.From(reading, SquareMetres);
+            ElementTakeoff takeoff = HostTakeoff.From(reading, SquareMetres);
             elements.Add(takeoff);
-            warnings.AddRange(WallTakeoff.Warnings(takeoff, reading));
+            warnings.AddRange(HostTakeoff.Warnings(takeoff, reading));
             reasons.AddRange(reading.Unmeasured.Select(opening => opening.Reason));
         }
 

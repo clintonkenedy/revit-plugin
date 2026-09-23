@@ -81,7 +81,7 @@ public static class WallProbe
     private static WallResult Measure(Document document, Wall wall)
     {
         // Metrado reads first, before any probe transaction touches the model.
-        Metrado.Revit2027.WallReading reading = Metrado.Revit2027.WallReader.Read(document, wall);
+        Metrado.Revit2027.HostReading reading = Metrado.Revit2027.WallReader.Read(document, wall);
         double area = Area(wall);
         List<ElementId> inserts = [.. wall.FindInserts(true, true, true, true)
             .Union(InstanceVoidCutUtils.GetCuttingVoidInstances(wall))];

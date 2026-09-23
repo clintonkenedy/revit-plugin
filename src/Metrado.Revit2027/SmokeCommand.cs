@@ -112,7 +112,7 @@ public sealed class SmokeCommand : IExternalCommand
             .Select(wall => wall.WallType)
             .DistinctBy(type => type.UniqueId)
             .Count(type => !string.IsNullOrWhiteSpace(type.get_Parameter(BuiltInParameter.ASSEMBLY_CODE)?.AsString()));
-        WallReading? coded = walls
+        HostReading? coded = walls
             .Select(wall => WallReader.Read(document, wall))
             .FirstOrDefault(reading => !string.IsNullOrWhiteSpace(reading.AssemblyCode));
 
@@ -147,7 +147,7 @@ public sealed class SmokeCommand : IExternalCommand
                 continue;
             }
 
-            WallReading reading = WallReader.Read(document, wall);
+            HostReading reading = WallReader.Read(document, wall);
             return SmokeChecks.Openings(
                 wall.UniqueId,
                 [.. inserts.Select(insert => insert.UniqueId)],

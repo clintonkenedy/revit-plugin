@@ -11,7 +11,7 @@ namespace Metrado.Revit2027.Tests;
 /// factor proves that every quantity passes through it exactly once and nothing
 /// else does.
 /// </summary>
-public sealed class WallTakeoffTests
+public sealed class HostTakeoffTests
 {
     /// <summary>Doubles, so a value converted twice or not at all is visible.</summary>
     private static double Doubled(double squareFeet) => squareFeet * 2;
@@ -19,7 +19,7 @@ public sealed class WallTakeoffTests
     [Fact]
     public void TheCategoryIsTheCriteriaKeyNotTheLocalizedCategoryName()
     {
-        ElementTakeoff takeoff = WallTakeoff.From(Reading(), Doubled);
+        ElementTakeoff takeoff = HostTakeoff.From(Reading(), Doubled);
 
         Assert.Equal("Walls", takeoff.CategoryName);
         Assert.True(
@@ -30,7 +30,7 @@ public sealed class WallTakeoffTests
     [Fact]
     public void TheComputedAreaIsTheOnlyQuantityConvertedOnceInSquareMetres()
     {
-        ElementTakeoff takeoff = WallTakeoff.From(Reading(computedArea: 107.639), Doubled);
+        ElementTakeoff takeoff = HostTakeoff.From(Reading(computedArea: 107.639), Doubled);
 
         RawQuantity raw = Assert.Single(takeoff.Quantities);
         Assert.Equal("HOST_AREA_COMPUTED", raw.SourceKey);
@@ -45,7 +45,7 @@ public sealed class WallTakeoffTests
     [Fact]
     public void TheQuantitySourceIsOneTheWallsCriterionReads()
     {
-        ElementTakeoff takeoff = WallTakeoff.From(Reading(), Doubled);
+        ElementTakeoff takeoff = HostTakeoff.From(Reading(), Doubled);
 
         Assert.Contains(Assert.Single(takeoff.Quantities).SourceKey, CriteriaSet.Default.ByCategory["Walls"].Sources);
     }
@@ -58,14 +58,14 @@ public sealed class WallTakeoffTests
     [Fact]
     public void EachOpeningStaysIndividualConvertedAndIdentified()
     {
-        WallReading reading = Reading(openings:
+        HostReading reading = Reading(openings:
         [
             new OpeningReading("door-1", 21.0),
             new OpeningReading("window-1", 12.5),
             new OpeningReading("window-2", 12.5),
         ]);
 
-        ElementTakeoff takeoff = WallTakeoff.From(reading, Doubled);
+        ElementTakeoff takeoff = HostTakeoff.From(reading, Doubled);
 
         Assert.Equal(
             [
@@ -79,7 +79,7 @@ public sealed class WallTakeoffTests
     [Fact]
     public void AWallWithNoOpeningsHasAnEmptyListNotNull()
     {
-        ElementTakeoff takeoff = WallTakeoff.From(Reading(openings: []), Doubled);
+        ElementTakeoff takeoff = HostTakeoff.From(Reading(openings: []), Doubled);
 
         Assert.NotNull(takeoff.Openings);
         Assert.Empty(takeoff.Openings);
@@ -88,7 +88,7 @@ public sealed class WallTakeoffTests
     [Fact]
     public void IdentityAndNamesPassThroughUnchanged()
     {
-        ElementTakeoff takeoff = WallTakeoff.From(Reading(), Doubled);
+        ElementTakeoff takeoff = HostTakeoff.From(Reading(), Doubled);
 
         Assert.Equal("wall-unique-id", takeoff.UniqueId);
         Assert.Equal("Basic Wall", takeoff.FamilyName);
@@ -108,7 +108,7 @@ public sealed class WallTakeoffTests
     [InlineData(null)]
     public void TheAssemblyCodeIsPassedOnAsRead(string? assemblyCode)
     {
-        ElementTakeoff takeoff = WallTakeoff.From(Reading(assemblyCode: assemblyCode), Doubled);
+        ElementTakeoff takeoff = HostTakeoff.From(Reading(assemblyCode: assemblyCode), Doubled);
 
         Assert.Equal(assemblyCode, takeoff.Codes.AssemblyCode);
         Assert.Null(takeoff.Codes.Keynote);
@@ -123,7 +123,7 @@ public sealed class WallTakeoffTests
     [Fact]
     public void AnUnreadableComputedAreaGivesNoQuantityNotZero()
     {
-        ElementTakeoff takeoff = WallTakeoff.From(Reading(computedArea: null), Doubled);
+        ElementTakeoff takeoff = HostTakeoff.From(Reading(computedArea: null), Doubled);
 
         Assert.Empty(takeoff.Quantities);
     }
@@ -136,9 +136,9 @@ public sealed class WallTakeoffTests
     [Fact]
     public void ConvertedQuantitiesAreRoundedToTheNanoSquareMetre()
     {
-        WallReading reading = Reading(computedArea: 1.0, openings: [new OpeningReading("window-1", 1.0)]);
+        HostReading reading = Reading(computedArea: 1.0, openings: [new OpeningReading("window-1", 1.0)]);
 
-        ElementTakeoff takeoff = WallTakeoff.From(reading, _ => 0.9999999999999999);
+        ElementTakeoff takeoff = HostTakeoff.From(reading, _ => 0.9999999999999999);
 
         Assert.Equal(1.0, Assert.Single(takeoff.Quantities).Amount.Value);
         Assert.Equal(1.0, Assert.Single(takeoff.Openings).Amount.Value);
@@ -154,7 +154,7 @@ public sealed class WallTakeoffTests
     [InlineData(1.0000000000001)]
     public void RoundingRemovesNoiseWellBeyondOneUlp(double noisy)
     {
-        ElementTakeoff takeoff = WallTakeoff.From(Reading(), _ => noisy);
+        ElementTakeoff takeoff = HostTakeoff.From(Reading(), _ => noisy);
 
         Assert.Equal(1.0, Assert.Single(takeoff.Quantities).Amount.Value);
     }
@@ -162,13 +162,13 @@ public sealed class WallTakeoffTests
     [Fact]
     public void EveryUnmeasuredOpeningGetsItsOwnWarning()
     {
-        WallReading reading = Reading(unmeasured:
+        HostReading reading = Reading(unmeasured:
         [
             new UnmeasuredOpening("void-niche", "a void cut"),
             new UnmeasuredOpening("shadow-window", "hosted by another wall"),
         ]);
 
-        IReadOnlyList<ValidationWarning> warnings = WallTakeoff.Warnings(WallTakeoff.From(reading, Doubled), reading);
+        IReadOnlyList<ValidationWarning> warnings = HostTakeoff.Warnings(HostTakeoff.From(reading, Doubled), reading);
 
         Assert.Collection(
             warnings,
@@ -182,7 +182,7 @@ public sealed class WallTakeoffTests
     [Fact]
     public void RoundingKeepsEveryRealDecimal()
     {
-        ElementTakeoff takeoff = WallTakeoff.From(Reading(), _ => 1.234567891);
+        ElementTakeoff takeoff = HostTakeoff.From(Reading(), _ => 1.234567891);
 
         Assert.Equal(1.234567891, Assert.Single(takeoff.Quantities).Amount.Value);
     }
@@ -195,13 +195,13 @@ public sealed class WallTakeoffTests
     [Fact]
     public void AnUnmeasuredOpeningIsReportedNeverMeasured()
     {
-        WallReading reading = Reading(unmeasured:
+        HostReading reading = Reading(unmeasured:
         [
             new UnmeasuredOpening("shadow-window", "cuts this wall but is hosted by another"),
         ]);
 
-        ElementTakeoff takeoff = WallTakeoff.From(reading, Doubled);
-        ValidationWarning warning = Assert.Single(WallTakeoff.Warnings(takeoff, reading));
+        ElementTakeoff takeoff = HostTakeoff.From(reading, Doubled);
+        ValidationWarning warning = Assert.Single(HostTakeoff.Warnings(takeoff, reading));
 
         Assert.DoesNotContain(takeoff.Openings, opening => opening.UniqueId == "shadow-window");
         Assert.Equal("wall-unique-id", warning.UniqueId);
@@ -213,12 +213,12 @@ public sealed class WallTakeoffTests
     [Fact]
     public void AWallWithEveryOpeningMeasuredHasNoWarnings()
     {
-        WallReading reading = Reading();
+        HostReading reading = Reading();
 
-        Assert.Empty(WallTakeoff.Warnings(WallTakeoff.From(reading, Doubled), reading));
+        Assert.Empty(HostTakeoff.Warnings(HostTakeoff.From(reading, Doubled), reading));
     }
 
-    private static WallReading Reading(
+    private static HostReading Reading(
         double? computedArea = 100.0,
         string? assemblyCode = "B2010",
         IReadOnlyList<OpeningReading>? openings = null,

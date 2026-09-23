@@ -12,7 +12,7 @@ public static class ReadableSources
 {
     public static IReadOnlyDictionary<string, IReadOnlyList<string>> ByCategory { get; } = new Dictionary<string, IReadOnlyList<string>>
     {
-        [WallTakeoff.CategoryKey] = [WallTakeoff.ComputedAreaSource],
+        [HostTakeoff.CategoryKey] = [HostTakeoff.ComputedAreaSource],
         [OtherElementReader.RailingsKey] = [OtherElementReader.LengthSource],
         [OtherElementReader.DoorsKey] = [],
         [OtherElementReader.WindowsKey] = [],

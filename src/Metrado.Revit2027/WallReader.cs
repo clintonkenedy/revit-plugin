@@ -7,7 +7,7 @@ using RevitModificationOutsideTransaction = Autodesk.Revit.Exceptions.Modificati
 namespace Metrado.Revit2027;
 
 /// <summary>
-/// Reads the model's walls into <see cref="WallReading"/>s: the Revit-bound
+/// Reads the model's walls into <see cref="HostReading"/>s: the Revit-bound
 /// half of wall extraction. It only reads — collectors, parameters, geometry
 /// and outlines — and opens no transaction; <see cref="OpeningPolicy"/> makes
 /// every decision about what a reading carries.
@@ -17,7 +17,7 @@ namespace Metrado.Revit2027;
 /// </summary>
 public static class WallReader
 {
-    public static IReadOnlyList<WallReading> ReadAll(Document document, Guid? sharedParameter = null) =>
+    public static IReadOnlyList<HostReading> ReadAll(Document document, Guid? sharedParameter = null) =>
         [.. Walls(document).Select(wall => Read(document, wall, sharedParameter))];
 
     /// <summary>
@@ -32,7 +32,7 @@ public static class WallReader
             .OfType<Wall>()
             .Where(wall => wall.WallType.Kind == WallKind.Basic && wall.DesignOption is not { IsPrimary: false });
 
-    public static WallReading Read(Document document, Wall wall, Guid? sharedParameter = null)
+    public static HostReading Read(Document document, Wall wall, Guid? sharedParameter = null)
     {
         WallType type = wall.WallType;
         Axis? axis = wall.Location is LocationCurve { Curve: Line line }
@@ -55,7 +55,7 @@ public static class WallReader
             new WallFacts(axis is null ? Unknown : Extent(axis, SolidPoints(wall)), Conditions(document, wall, axis, cuts), otherCuts),
             Inserts(document, wall, axis, cuts, voids, candidates));
 
-        return new WallReading(
+        return new HostReading(
             UniqueId: wall.UniqueId,
             FamilyName: NonBlank(type.FamilyName, type.Kind.ToString()),
             TypeName: NonBlank(type.Name, "(unnamed type)"),

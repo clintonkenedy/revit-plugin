@@ -10,7 +10,7 @@ namespace Metrado.Revit2027;
 /// <param name="ComputedAreaSquareFeet">Null when the wall carries no readable, finite computed area.</param>
 /// <param name="Openings">Openings measured individually.</param>
 /// <param name="Unmeasured">Openings Revit subtracted whose own area could not be measured.</param>
-public sealed record WallReading(
+public sealed record HostReading(
     string UniqueId,
     string FamilyName,
     string TypeName,
@@ -29,9 +29,9 @@ public sealed record OpeningReading(string UniqueId, double AreaSquareFeet);
 public sealed record UnmeasuredOpening(string UniqueId, string Reason);
 
 /// <summary>
-/// Turns a <see cref="WallReading"/> into the domain's <see cref="ElementTakeoff"/>.
+/// Turns a <see cref="HostReading"/> into the domain's <see cref="ElementTakeoff"/>.
 /// </summary>
-public static class WallTakeoff
+public static class HostTakeoff
 {
     /// <summary>
     /// The criteria key for walls — never <c>Category.Name</c>, which Revit
@@ -49,7 +49,7 @@ public static class WallTakeoff
     /// Injected rather than written here as a factor, so the conversion stays
     /// Revit's own and this mapping stays runnable outside it.
     /// </param>
-    public static ElementTakeoff From(WallReading reading, Func<double, double> squareFeetToSquareMetres)
+    public static ElementTakeoff From(HostReading reading, Func<double, double> squareFeetToSquareMetres)
     {
         ArgumentNullException.ThrowIfNull(reading);
         ArgumentNullException.ThrowIfNull(squareFeetToSquareMetres);
@@ -85,7 +85,7 @@ public static class WallTakeoff
     /// Revit's deduction of it stands and it is never added back; the warning
     /// is what keeps that from being silent.
     /// </summary>
-    public static IReadOnlyList<ValidationWarning> Warnings(ElementTakeoff takeoff, WallReading reading)
+    public static IReadOnlyList<ValidationWarning> Warnings(ElementTakeoff takeoff, HostReading reading)
     {
         ArgumentNullException.ThrowIfNull(takeoff);
         ArgumentNullException.ThrowIfNull(reading);
