@@ -25,8 +25,9 @@ public static class LayerOpeningProbe
     /// <param name="WidthShareM3">The opening's gain times the material's summed layer width: the share the rule would add back.</param>
     public sealed record MaterialResult(string Material, int Layers, double WidthM, double VolumeGainM3, double WidthShareM3, double AreaGainM2, double CountShareM2);
 
-    /// <param name="NotProbed">Each measured opening left out, with why: no element to delete, or no layers read.</param>
-    public sealed record Result(List<OpeningResult> Openings, List<string> NotProbed, List<OpeningResult> Control, string? ControlNote, bool ModifiedAfterProbe);
+    /// <param name="NotProbed">Each measured opening left out, with why: past the cap, no element to delete, or no layers read.</param>
+    /// <param name="CapPerCategory">How many openings of each category the run probed at most.</param>
+    public sealed record Result(List<OpeningResult> Openings, List<string> NotProbed, int CapPerCategory, List<OpeningResult> Control, string? ControlNote, bool ModifiedAfterProbe);
 
     /// <param name="maxOpenings">The cap on each category's probed openings, so floors and roofs are reached whatever the walls hold.</param>
     public static Result Run(Document document, int maxOpenings)
@@ -47,7 +48,8 @@ public static class LayerOpeningProbe
             {
                 if (probed.GetValueOrDefault(reading.CategoryKey) >= maxOpenings)
                 {
-                    break;
+                    notProbed.Add($"{reading.CategoryKey} {opening.UniqueId}: past the cap of {maxOpenings} for its category");
+                    continue;
                 }
 
                 if (document.GetElement(opening.UniqueId) is null)
@@ -67,7 +69,7 @@ public static class LayerOpeningProbe
         }
 
         (List<OpeningResult> control, string? note) = Control(document, hosts);
-        return new Result(openings, notProbed, control, note, document.IsModified);
+        return new Result(openings, notProbed, maxOpenings, control, note, document.IsModified);
     }
 
     /// <summary>Null when the opening has no element to delete (a hole of the host's own outline) or the host no layers.</summary>
