@@ -5,12 +5,16 @@ namespace Metrado.Revit2027;
 /// <summary>
 /// The class <c>Metrado.addin</c> names. Revit constructs it at startup and
 /// this is the add-in's only entry point: it checks the deployment is complete,
-/// adds one ribbon button and does nothing else, so a failure here is a
-/// deployment or registration failure and nothing more.
+/// adds the export button (and, in a development session, the smoke run's)
+/// and does nothing else, so a failure here is a deployment or registration
+/// failure and nothing more.
 /// </summary>
 public sealed class MetradoApplication : IExternalApplication
 {
     private const string PanelName = "Metrado";
+
+    /// <summary>Set to "1" in Revit's environment, it adds the host smoke run's button.</summary>
+    public const string SmokeSwitch = "METRADO_SMOKE";
 
     public Result OnStartup(UIControlledApplication application)
     {
@@ -32,6 +36,20 @@ public sealed class MetradoApplication : IExternalApplication
             ToolTip = "Export the model's partidas and metrado to an Excel workbook beside the model.",
             AvailabilityClassName = typeof(CommandAvailability).FullName,
         });
+
+        // Development only: the host smoke run starts Revit with this set.
+        // Estimators never see the button.
+        if (Environment.GetEnvironmentVariable(SmokeSwitch) == "1")
+        {
+            panel.AddItem(new PushButtonData(
+                nameof(SmokeCommand),
+                "Smoke\ntest",
+                typeof(SmokeCommand).Assembly.Location,
+                typeof(SmokeCommand).FullName)
+            {
+                AvailabilityClassName = typeof(CommandAvailability).FullName,
+            });
+        }
 
         return Result.Succeeded;
     }
