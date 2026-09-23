@@ -49,7 +49,7 @@ public static class CriteriaFile
     };
 
     /// <summary>The entries of a criteria file, in the order written, or why the file cannot be honoured.</summary>
-    /// <remarks>Lines and positions count from 1, as an editor shows them; positions count bytes of UTF-8.</remarks>
+    /// <remarks>Lines and positions count from 1, and positions count characters, as an editor shows them.</remarks>
     public static Result<IReadOnlyList<LocatedOverride>, ConfigError> Parse(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
@@ -65,7 +65,18 @@ public static class CriteriaFile
             return Result<IReadOnlyList<LocatedOverride>, ConfigError>.Err(
                 new ConfigError($"The file is not valid JSON: {Reason(ex)}")
                 {
-                    Location = new ConfigLocation((ex.LineNumber ?? 0) + 1, (ex.BytePositionInLine ?? 0) + 1),
+                    Location = InLine(utf8, ex.LineNumber ?? 0, ex.BytePositionInLine ?? 0),
+                });
+        }
+        catch (InvalidOperationException)
+        {
+            // The reader accepts any \uXXXX escape; one standing for half of a
+            // surrogate pair fails only when the text is decoded, and must stop
+            // the run like any other refusal, never escape to Revit unnamed.
+            return Result<IReadOnlyList<LocatedOverride>, ConfigError>.Err(
+                new ConfigError("A \\u escape there stands for half of a surrogate pair, which is no character.")
+                {
+                    Location = At(utf8, reader.TokenStartIndex),
                 });
         }
     }
@@ -232,13 +243,30 @@ public static class CriteriaFile
             ? reader.GetString()!
             : Encoding.UTF8.GetString(utf8, (int)reader.TokenStartIndex, reader.ValueSpan.Length);
 
-    /// <summary>The 1-based line and byte position of an offset, as an editor counts them.</summary>
+    /// <summary>
+    /// The 1-based line and character position of a byte offset, as an editor
+    /// shows them: an accented letter earlier on the line is one position, not
+    /// the two bytes UTF-8 gives it.
+    /// </summary>
     private static ConfigLocation At(byte[] utf8, long offset)
     {
         int end = (int)Math.Min(offset, utf8.Length);
-        int lastNewline = Array.LastIndexOf(utf8, (byte)'\n', Math.Max(end - 1, 0), end);
+        int lineStart = end == 0 ? 0 : Array.LastIndexOf(utf8, (byte)'\n', end - 1) + 1;
         int line = 1 + utf8.AsSpan(0, end).Count((byte)'\n');
-        return new ConfigLocation(line, end - lastNewline);
+        return new ConfigLocation(line, Encoding.UTF8.GetCharCount(utf8, lineStart, end - lineStart) + 1);
+    }
+
+    /// <summary>The same, from the reader's own 0-based line and byte position within it.</summary>
+    private static ConfigLocation InLine(byte[] utf8, long line, long bytePositionInLine)
+    {
+        int lineStart = 0;
+        for (long seen = 0; seen < line && lineStart < utf8.Length; seen++)
+        {
+            int newline = Array.IndexOf(utf8, (byte)'\n', lineStart);
+            lineStart = newline < 0 ? utf8.Length : newline + 1;
+        }
+
+        return At(utf8, Math.Min(utf8.Length, lineStart + bytePositionInLine));
     }
 
     /// <summary>The reader's reason, without its own 0-based "LineNumber" and "BytePositionInLine".</summary>

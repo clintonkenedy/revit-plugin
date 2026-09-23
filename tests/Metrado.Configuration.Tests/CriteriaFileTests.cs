@@ -73,9 +73,40 @@ public sealed class CriteriaFileTests
     {
         ConfigError error = Refused("{\n  \"Walls\": { \"threshold\": }\n}");
 
-        Assert.Equal(2, error.Location?.Line);
+        Assert.Equal(new ConfigLocation(2, 27), error.Location);
         Assert.Contains("not valid JSON", error.Message);
         Assert.DoesNotContain("LineNumber", error.Message);
+    }
+
+    /// <summary>
+    /// Positions count characters, as an editor shows them: an accented letter
+    /// earlier on the line is one position, not the two bytes UTF-8 gives it.
+    /// </summary>
+    [Fact]
+    public void PositionsCountCharactersNotBytes()
+    {
+        Assert.Equal(new ConfigLocation(1, 35), Refused("""{ /* vanos pequeños */ "Walls": { "treshold": 1 } }""").Location);
+        Assert.Equal(new ConfigLocation(1, 35), Refused("""{ /* ñ */ "Walls": { "threshold": } }""").Location);
+    }
+
+    /// <summary>
+    /// A \u escape for half a surrogate pair passes the reader and fails only
+    /// when the text is decoded; it must still stop the run with a location,
+    /// never escape as an exception Revit shows without the file's name.
+    /// </summary>
+    [Theory]
+    [InlineData("""{ "\uD800": {} }""")]
+    [InlineData("""{ "Walls": { "\uDC00": 1 } }""")]
+    [InlineData("""{ "Walls": { "mode": "\uD800" } }""")]
+    [InlineData("""{ "Walls": { "unit": "\uD800" } }""")]
+    [InlineData("""{ "Walls": { "threshold": "\uD800" } }""")]
+    [InlineData("""{ "Walls": { "sources": ["\uD800"] } }""")]
+    public void AnEscapedHalfSurrogateIsRefusedWithItsPlace(string text)
+    {
+        ConfigError error = Refused(text);
+
+        Assert.Equal(1, error.Location?.Line);
+        Assert.Contains("\\u", error.Message);
     }
 
     [Theory]
@@ -166,6 +197,11 @@ public sealed class CriteriaFileTests
     [InlineData("sources", "\"Area\"")]
     [InlineData("sources", "[1]")]
     [InlineData("sources", "[\"  \"]")]
+    [InlineData("threshold", "null")]
+    [InlineData("unit", "null")]
+    [InlineData("mode", "null")]
+    [InlineData("sources", "null")]
+    [InlineData("sources", "[null]")]
     public void AFieldOfTheWrongKindIsRefusedNamingIt(string field, string value)
     {
         ConfigError error = Refused($$"""{ "Walls": { "{{field}}": {{value}} } }""");

@@ -43,7 +43,7 @@ public static class CompletionReport
         summary.AppendLine();
 
         summary.AppendLine(criteria.Source == ConfigSource.File
-            ? $"Criteria in force, read from {criteria.Path}:"
+            ? $"Criteria in force, from {criteria.Path} over the built-in criteria:"
             : $"No criteria file was found beside the model ({CriteriaFileLocator.FileName}), so the built-in criteria are in force:");
         foreach (CategoryCriterion criterion in criteria.Criteria.ByCategory.Values.OrderBy(c => c.Category, StringComparer.Ordinal))
         {

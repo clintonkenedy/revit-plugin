@@ -5,8 +5,8 @@ namespace Metrado.Domain;
 /// </summary>
 /// <remarks>
 /// Plain numbers, not a parser exception. Lines and positions count from 1, as
-/// an editor shows them (positions in bytes of UTF-8); <c>Metrado.Configuration</c>
-/// converts the JSON reader's 0-based numbers into them. Carrying
+/// an editor shows them (positions in characters); <c>Metrado.Configuration</c>
+/// converts the JSON reader's 0-based byte numbers into them. Carrying
 /// the exception itself would drag <c>System.Text.Json</c> into Domain, and on
 /// the netstandard2.0 leg that package is not in-box — it pulls five more
 /// assemblies and falsifies decision D1.

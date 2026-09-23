@@ -75,6 +75,7 @@ public sealed class CompletionReportTests
         string summary = CompletionReport.For(Report(lines: 1, unclassified: 0), fromFile, Workbook).Summary;
 
         Assert.Contains(@"C:\Projects\Office\metrado.criteria.json", summary);
+        Assert.Contains("over the built-in criteria", summary);
         Assert.DoesNotContain("No criteria file was found", summary);
     }
 
