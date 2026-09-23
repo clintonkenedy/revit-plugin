@@ -16,14 +16,17 @@ public static class OtherElementReader
     public const string DoorsKey = "Doors";
     public const string WindowsKey = "Windows";
 
+    /// <summary>The one source read for railings.</summary>
+    public const string LengthSource = "CURVE_ELEM_LENGTH";
+
     public static IReadOnlyList<ElementReading> ReadAll(Document document, Guid? sharedParameter) =>
     [
         .. InForce(new FilteredElementCollector(document).OfClass(typeof(Railing)))
             .OfType<Railing>()
             .Select(railing => Read(document, railing, RailingsKey, [Length(railing)], sharedParameter, ElementTakeoffs.RepeatedOn(Storeys(document, railing)))),
-        .. InForce(new FilteredElementCollector(document).OfCategory(BuiltInCategory.OST_Doors).WhereElementIsNotElementType().OfType<FamilyInstance>())
+        .. InForce(TopLevel(new FilteredElementCollector(document).OfCategory(BuiltInCategory.OST_Doors)))
             .Select(door => Read(document, door, DoorsKey, [], sharedParameter)),
-        .. InForce(new FilteredElementCollector(document).OfCategory(BuiltInCategory.OST_Windows).WhereElementIsNotElementType().OfType<FamilyInstance>())
+        .. InForce(TopLevel(new FilteredElementCollector(document).OfCategory(BuiltInCategory.OST_Windows)))
             .Select(window => Read(document, window, WindowsKey, [], sharedParameter)),
     ];
 
@@ -49,12 +52,20 @@ public static class OtherElementReader
         };
     }
 
+    /// <summary>
+    /// Doors or windows placed in the model, not the shared components nested
+    /// in them: a leaf or a sidelight is part of its door, and counting it too
+    /// would add a door that is not there.
+    /// </summary>
+    private static IEnumerable<FamilyInstance> TopLevel(FilteredElementCollector collector) =>
+        collector.WhereElementIsNotElementType().OfType<FamilyInstance>().Where(instance => instance.SuperComponent is null);
+
     /// <summary>Primary design option or none, as for walls.</summary>
     private static IEnumerable<Element> InForce(IEnumerable<Element> elements) =>
         elements.Where(element => element.DesignOption is not { IsPrimary: false });
 
     private static QuantityReading Length(Element railing) =>
-        new("CURVE_ELEM_LENGTH", QuantityKind.Length,
+        new(LengthSource, QuantityKind.Length,
             railing.get_Parameter(BuiltInParameter.CURVE_ELEM_LENGTH) is { StorageType: StorageType.Double, HasValue: true } length
                 ? length.AsDouble()
                 : double.NaN);

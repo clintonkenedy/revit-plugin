@@ -94,6 +94,7 @@ public sealed class ReadOnlyTripwireTests
         "Autodesk.Revit.DB.ElementType.get_FamilyName",
         "Autodesk.Revit.DB.FaceArray.get_Size",
         "Autodesk.Revit.DB.FamilyInstance.get_Host",
+        "Autodesk.Revit.DB.FamilyInstance.get_SuperComponent",
         "Autodesk.Revit.DB.FilteredElementCollector..ctor",
         "Autodesk.Revit.DB.FilteredElementCollector.OfCategory",
         "Autodesk.Revit.DB.FilteredElementCollector.OfClass",

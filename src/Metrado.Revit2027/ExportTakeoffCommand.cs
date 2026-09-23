@@ -40,11 +40,16 @@ public sealed class ExportTakeoffCommand : IExternalCommand
 
         (CriteriaFileLookup lookup, string? criteriaPath) = CriteriaFileLocator.Locate(location.Path);
         Result<EffectiveCriteria, ConfigError> criteria = CriteriaResolver.Resolve(lookup, criteriaPath);
-        if (!criteria.IsOk)
+
+        // A supplied file that cannot be honoured stops the run: a budget
+        // silently priced under the defaults would look right and be wrong.
+        // So does one naming a source extraction never reads, which every
+        // element would lack.
+        ConfigError? refusal = criteria.IsOk ? ReadableSources.Check(criteria.Value.Criteria) : criteria.Error;
+        if (refusal is not null)
         {
-            // A supplied file that cannot be honoured stops the run: a budget
-            // silently priced under the defaults would look right and be wrong.
-            TaskDialog.Show(Title, $"No workbook was written. {criteria.Error.Message}");
+            string file = criteria.IsOk && criteria.Value.Path is string path ? $" The criteria file is '{path}'." : string.Empty;
+            TaskDialog.Show(Title, $"No workbook was written. {refusal.Message}{file}");
             return Result.Cancelled;
         }
 
