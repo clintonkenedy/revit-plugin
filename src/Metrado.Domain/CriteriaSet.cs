@@ -220,13 +220,39 @@ public sealed record CriteriaSet
                 unit.Symbol()));
         }
 
+        Result<LayerCriterion?, ConfigError> layers = entry.Layers is null
+            ? Result<LayerCriterion?, ConfigError>.Ok(baseline.Layers)
+            : entry.Layers.Match(
+                off: () => Result<LayerCriterion?, ConfigError>.Ok(null),
+                on: units => Widen(LayerCriterion.TryCreate(units, entry.Category)));
+
+        if (!layers.IsOk)
+        {
+            return Result<CategoryCriterion, ConfigError>.Err(layers.Error);
+        }
+
+        if (layers.Value is not null && (unit != QuantityUnit.SquareMetre || sources.Count == 0))
+        {
+            return Result<CategoryCriterion, ConfigError>.Err(Rejected(
+                $"'{entry.Category}' cannot be taken off by material layer: a layered category is measured in m2 from a quantity source, "
+                    + "since its openings and threshold are areas.",
+                entry.Category,
+                "layers"));
+        }
+
         return Result<CategoryCriterion, ConfigError>.Ok(
             new CategoryCriterion(
                 entry.Category,
                 unit,
                 sources,
-                threshold.Value));
+                threshold.Value,
+                layers.Value));
     }
+
+    private static Result<LayerCriterion?, ConfigError> Widen(Result<LayerCriterion, ConfigError> created) =>
+        created.IsOk
+            ? Result<LayerCriterion?, ConfigError>.Ok(created.Value)
+            : Result<LayerCriterion?, ConfigError>.Err(created.Error);
 
     private static ConfigError Rejected(string message, string category, string invalidValue) =>
         new ConfigError(message) { Category = category, InvalidValue = invalidValue };

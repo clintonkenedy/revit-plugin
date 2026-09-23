@@ -22,13 +22,15 @@ public sealed record CategoryOverride
         QuantityUnit? unit = null,
         IReadOnlyList<string>? sources = null,
         double? threshold = null,
-        BoundaryMode? mode = null)
+        BoundaryMode? mode = null,
+        LayerOverride? layers = null)
     {
         Category = Guard.RequiredText(category, nameof(category));
         Unit = unit;
         Sources = sources;
         Threshold = threshold;
         Mode = mode;
+        Layers = layers;
     }
 
     /// <summary>The category this entry configures. Always stated.</summary>
@@ -45,4 +47,7 @@ public sealed record CategoryOverride
 
     /// <summary>The boundary convention at equality, or null to inherit.</summary>
     public BoundaryMode? Mode { get; }
+
+    /// <summary>Material-layer takeoff turned off or on, or null to inherit.</summary>
+    public LayerOverride? Layers { get; }
 }

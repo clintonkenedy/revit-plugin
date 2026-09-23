@@ -15,11 +15,16 @@ namespace Metrado.Domain;
 /// </remarks>
 public sealed record CategoryCriterion
 {
+    /// <param name="layers">
+    /// How each material layer is measured, when the category is taken off by
+    /// layer (task 3.2); null to measure each element whole.
+    /// </param>
     public CategoryCriterion(
         string category,
         QuantityUnit unit,
         IReadOnlyList<string> sources,
-        OpeningsThreshold threshold)
+        OpeningsThreshold threshold,
+        LayerCriterion? layers = null)
     {
         Category = Guard.RequiredText(category, nameof(category));
         Sources = Guard.RequiredValue(sources, nameof(sources));
@@ -33,8 +38,19 @@ public sealed record CategoryCriterion
                 nameof(unit));
         }
 
+        // A layered element falls back to whole when its layers cannot be
+        // trusted, and its openings and threshold are areas: only an area
+        // measured from a source can be taken off by layer.
+        if (layers is not null && (unit != QuantityUnit.SquareMetre || sources.Count == 0))
+        {
+            throw new ArgumentException(
+                $"The {category} criterion is taken off by material layer, so it is measured in m2 from a quantity source.",
+                nameof(layers));
+        }
+
         Unit = unit;
         Threshold = threshold;
+        Layers = layers;
     }
 
     /// <summary>The Revit category this criterion measures.</summary>
@@ -53,4 +69,7 @@ public sealed record CategoryCriterion
 
     /// <summary>The openings threshold and boundary convention for this category.</summary>
     public OpeningsThreshold Threshold { get; }
+
+    /// <summary>How each material layer is measured; null when each element is measured whole.</summary>
+    public LayerCriterion? Layers { get; }
 }
