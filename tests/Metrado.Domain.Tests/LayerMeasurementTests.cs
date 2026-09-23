@@ -91,7 +91,7 @@ public sealed class LayerMeasurementTests
         Assert.Equal(new Quantity(13.11, QuantityUnit.SquareMetre), new Quantity(Math.Round(membrane.Metrado.Metrado.Value, 9), membrane.Metrado.Metrado.Unit));
     }
 
-    /// <summary>A volume share missed deletion by up to 0.56% on the samples (PR 28): an m3 line keeps Revit's deduction.</summary>
+    /// <summary>A volume share is not exact against deletion (PR 28): an m3 line keeps Revit's deduction, and is told about how much.</summary>
     [Fact]
     public void AnM3LineKeepsRevitsDeductionAndSaysHowMuch()
     {
@@ -100,10 +100,22 @@ public sealed class LayerMeasurementTests
         LayerLine brick = lines[1];
         Assert.Equal((QuantityUnit.CubicMetre, 1.62630, 1.62630, 1.62630), (brick.Metrado.Metrado.Unit, brick.Metrado.Metrado.Value, brick.Metrado.Raw.Value, brick.Metrado.Gross.Value));
         Assert.Equal(13.11, lines[0].Metrado.Metrado.Value, 9);
-        ValidationWarning warning = Assert.Single(warnings);
-        Assert.Contains("window", warning.Condition, StringComparison.Ordinal);
-        Assert.Contains("Material brick", warning.Condition, StringComparison.Ordinal);
-        Assert.DoesNotContain("Material tile", warning.Condition, StringComparison.Ordinal);
+        Assert.Equal(
+            "The openings the threshold adds back to this element (window, 0.6 m2 in all) are not returned to its layer lines in m3, since a share of volume is not exact: "
+            + "each keeps Revit's deduction of them, about their area times its layers' width (Material brick 0.078 m3).",
+            Assert.Single(warnings).Condition);
+    }
+
+    /// <summary>Each m3 line is given its own amount, by its own layers' summed width.</summary>
+    [Fact]
+    public void EachM3LineIsToldItsOwnAmount()
+    {
+        ElementTakeoff wall = Wall(
+            layers: [Layer(0, LayerFunction.Structure, 0.100, "block"), Layer(1, LayerFunction.Substrate, 0.050, "screed"), Layer(2, LayerFunction.Structure, 0.100, "block")],
+            materials: [.. Material("block", 2.50200, 25.02), .. Material("screed", 0.62550, 12.51)]);
+        LayerCriterion cubic = LayerCriterion.TryCreate(new Dictionary<LayerFunction, QuantityUnit> { [LayerFunction.Structure] = QuantityUnit.CubicMetre, [LayerFunction.Substrate] = QuantityUnit.CubicMetre }, "Walls").Value;
+
+        Assert.EndsWith("(Material block 0.12 m3, Material screed 0.03 m3).", Assert.Single(ByLayer(wall, Walls(cubic)).Warnings).Condition, StringComparison.Ordinal);
     }
 
     /// <summary>Under a condition no share can be told from a width: every line keeps Revit's deduction, and the warning says so.</summary>
@@ -113,9 +125,30 @@ public sealed class LayerMeasurementTests
         (IReadOnlyList<LayerLine> lines, IReadOnlyList<ValidationWarning> warnings) = ByLayer(Wall(conditions: [AddBackCondition.WrapsAtInserts]));
 
         Assert.All(lines, line => Assert.Equal(line.Metrado.Raw.Value, line.Metrado.Metrado.Value));
-        ValidationWarning warning = Assert.Single(warnings);
-        Assert.Contains("WrapsAtInserts", warning.Condition, StringComparison.Ordinal);
-        Assert.Contains("0.6 m2", warning.Condition, StringComparison.Ordinal);
+        Assert.Equal(
+            "The openings the threshold adds back to this element (window, 0.6 m2 in all) are not returned to its layer lines Material tile, Material brick, Material plaster: "
+            + "its layers wrap at inserts, or a door or window in it sets its own Wall Closure, so how much each layer lost to them cannot be told from its width. "
+            + "Each of those lines keeps Revit's deduction of them, whatever it was.",
+            Assert.Single(warnings).Condition);
+    }
+
+    /// <summary>
+    /// Under a condition no amount is stated, not even for an m3 line: a
+    /// vertically compound tile band an opening misses lost nothing to it.
+    /// </summary>
+    [Fact]
+    public void UnderSeveralConditionsEachIsNamedAndNoAmountIsGiven()
+    {
+        (_, IReadOnlyList<ValidationWarning> warnings) = ByLayer(
+            Wall(conditions: [AddBackCondition.VerticallyCompound, AddBackCondition.VariableLayer, AddBackCondition.ShapeEdited, AddBackCondition.StructuralDeck]),
+            Walls(Structure(QuantityUnit.CubicMetre)));
+
+        string warning = Assert.Single(warnings).Condition;
+        Assert.Contains(
+            ": its type is vertically compound; a layer of its type varies in thickness; its shape is edited; its type has a structural deck, so how much each layer lost",
+            warning,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(" m3", warning, StringComparison.Ordinal);
     }
 
     /// <summary>With nothing added back there is nothing kept to warn about.</summary>

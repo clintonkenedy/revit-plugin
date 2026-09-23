@@ -8,7 +8,7 @@ namespace Metrado.Domain;
 /// <remarks>Zero is left undeclared, so a default value is never taken for a condition.</remarks>
 public enum AddBackCondition
 {
-    /// <summary>The type's layers wrap at inserts.</summary>
+    /// <summary>The type's layers wrap at inserts, or a door or window it hosts sets its own Wall Closure.</summary>
     WrapsAtInserts = 1,
 
     /// <summary>A vertically compound wall type: its layers change up its height.</summary>

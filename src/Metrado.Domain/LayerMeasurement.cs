@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Metrado.Domain;
 
 /// <summary>
@@ -98,9 +100,10 @@ public static class LayerMeasurement
     /// <remarks>
     /// Each opening is decided once, at the host's threshold. One added back
     /// returns to an m2 line its area times the material's layer count: PR 28
-    /// found that share exact against deleting each opening. An m3 line keeps
-    /// Revit's deduction, the volume share having missed by up to 0.56%, and so
-    /// does every line of a type under a condition; one warning says which.
+    /// found each material's area gets back the host's gain times its layer
+    /// count when an opening is deleted. An m3 line keeps Revit's deduction,
+    /// the volume share not being exact, and so does every line of a type
+    /// under a condition; one warning says which.
     /// </remarks>
     /// <exception cref="ArgumentException">The criterion does not take the category off by layer.</exception>
     public static LayerOutcome Measure(ElementTakeoff element, CategoryCriterion criterion)
@@ -132,7 +135,7 @@ public static class LayerMeasurement
 
         List<LayerLine> lines = [];
         List<ValidationWarning> warnings = [];
-        List<string> kept = [];
+        List<MaterialLayers> kept = [];
         foreach (IGrouping<string, CompoundLayer> material in element.Layers.Layers
             .Where(layer => layer.MaterialId is not null && volumes.ContainsKey(layer.MaterialId))
             // Grouped over the layers, which the structure keeps in order, so
@@ -155,7 +158,8 @@ public static class LayerMeasurement
                 openings,
                 criterion.Threshold,
                 shared ? material.Count() : 0);
-            lines.Add(new LayerLine(new MaterialLayers(reference, [.. material]), outcome.Result!));
+            MaterialLayers layer = new(reference, [.. material]);
+            lines.Add(new LayerLine(layer, outcome.Result!));
             if (outcome.Warning is not null)
             {
                 warnings.Add(outcome.Warning);
@@ -163,7 +167,7 @@ public static class LayerMeasurement
 
             if (!shared)
             {
-                kept.Add(reference.MaterialName);
+                kept.Add(layer);
             }
         }
 
@@ -176,22 +180,41 @@ public static class LayerMeasurement
         return LayerOutcome.ByLayer(lines, warnings);
     }
 
-    private static ValidationWarning Kept(ElementTakeoff element, List<string> kept, List<OpeningQuantity> addedBack, IReadOnlyList<AddBackCondition> conditions)
+    /// <summary>
+    /// The lines that keep Revit's deduction of openings the threshold adds
+    /// back. Under a condition no amount is stated, since the condition is
+    /// that no share can be told; an m3 line with no condition is told about
+    /// how much, its layers' width times the openings' area.
+    /// </summary>
+    private static ValidationWarning Kept(ElementTakeoff element, List<MaterialLayers> kept, List<OpeningQuantity> addedBack, IReadOnlyList<AddBackCondition> conditions)
     {
-        string reason = conditions.Count > 0
-            ? $"its type is {string.Join(", ", conditions)}, so an opening's share of a layer cannot be told from its width"
-            : "they are measured by volume, and a share of volume is not exact";
+        double area = addedBack.Sum(opening => opening.Amount.Value);
+        string openings = string.Format(
+            CultureInfo.InvariantCulture,
+            "The openings the threshold adds back to this element ({0}, {1:0.###} m2 in all) are not returned to its layer lines",
+            string.Join(", ", addedBack.Select(opening => opening.UniqueId)),
+            area);
+
+        // With no condition only a line in m3 is kept.
         return ValidationWarning.ForElement(
             element,
-            string.Format(
-                System.Globalization.CultureInfo.InvariantCulture,
-                "The openings the threshold adds back to this element ({0}, {1:0.###} m2 in all) are not returned to its layer lines {2}: {3}. "
-                    + "Each of those lines keeps Revit's deduction of them, so it understates by that area for each layer it covers.",
-                string.Join(", ", addedBack.Select(opening => opening.UniqueId)),
-                addedBack.Sum(opening => opening.Amount.Value),
-                string.Join(", ", kept),
-                reason));
+            conditions.Count > 0
+                ? $"{openings} {string.Join(", ", kept.Select(layer => layer.Material.MaterialName))}: {string.Join("; ", conditions.Select(Why))}, "
+                    + "so how much each layer lost to them cannot be told from its width. Each of those lines keeps Revit's deduction of them, whatever it was."
+                : $"{openings} in m3, since a share of volume is not exact: each keeps Revit's deduction of them, about their area times its layers' width ("
+                    + string.Join(", ", kept.Select(layer => string.Format(CultureInfo.InvariantCulture, "{0} {1:0.###} m3", layer.Material.MaterialName, area * layer.Width.Value)))
+                    + ").");
     }
+
+    private static string Why(AddBackCondition condition) => condition switch
+    {
+        AddBackCondition.WrapsAtInserts => "its layers wrap at inserts, or a door or window in it sets its own Wall Closure",
+        AddBackCondition.VerticallyCompound => "its type is vertically compound",
+        AddBackCondition.VariableLayer => "a layer of its type varies in thickness",
+        AddBackCondition.ShapeEdited => "its shape is edited",
+        AddBackCondition.StructuralDeck => "its type has a structural deck",
+        _ => condition.ToString(),
+    };
 
     private static LayerReconciliation Fault(Quantity? whole, double sum, int terms, LayerFault fault, string? detail = null) =>
         new(whole, sum, terms, fault, detail);
