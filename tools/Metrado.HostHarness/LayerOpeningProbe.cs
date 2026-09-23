@@ -6,12 +6,14 @@ namespace Metrado.HostHarness;
 /// <summary>
 /// Holds the per-layer add-back (task 3.2) to ground truth before it is
 /// written. For each opening Metrado measures in a layered wall, floor or
-/// roof in force, it deletes the opening in a transaction that is rolled
-/// back and reads what each material gets back: its volume against the
-/// opening's area times the material's summed layer width, and its area
-/// against the opening's area times its layer count. As a negative control
+/// roof in force, up to a cap per category, it deletes the opening in a
+/// transaction that is rolled back and reads what each material gets back:
+/// its volume against the host's gain times the material's summed layer
+/// width, and its area against the host's gain times its layer count. An
+/// opening it cannot delete is listed with the reason. As a negative control
 /// it sets one tested wall type to wrap at inserts, in the same kind of
-/// transaction, and shows the shares depart. The model is never saved.
+/// transaction, and probes its openings again, so the two runs can be
+/// compared. The model is never saved.
 /// </summary>
 public static class LayerOpeningProbe
 {
@@ -23,11 +25,15 @@ public static class LayerOpeningProbe
     /// <param name="WidthShareM3">The opening's gain times the material's summed layer width: the share the rule would add back.</param>
     public sealed record MaterialResult(string Material, int Layers, double WidthM, double VolumeGainM3, double WidthShareM3, double AreaGainM2, double CountShareM2);
 
-    public sealed record Result(List<OpeningResult> Openings, List<OpeningResult> Control, string? ControlNote, bool ModifiedAfterProbe);
+    /// <param name="NotProbed">Each measured opening left out, with why: no element to delete, or no layers read.</param>
+    public sealed record Result(List<OpeningResult> Openings, List<string> NotProbed, List<OpeningResult> Control, string? ControlNote, bool ModifiedAfterProbe);
 
+    /// <param name="maxOpenings">The cap on each category's probed openings, so floors and roofs are reached whatever the walls hold.</param>
     public static Result Run(Document document, int maxOpenings)
     {
         List<OpeningResult> openings = [];
+        List<string> notProbed = [];
+        Dictionary<string, int> probed = [];
         List<(HostObject Host, HostReading Reading)> hosts =
         [
             .. WallReader.Walls(document).Select(wall => ((HostObject)wall, WallReader.Read(document, wall))),
@@ -39,20 +45,29 @@ public static class LayerOpeningProbe
         {
             foreach (OpeningReading opening in reading.Openings)
             {
-                if (openings.Count >= maxOpenings)
+                if (probed.GetValueOrDefault(reading.CategoryKey) >= maxOpenings)
                 {
                     break;
                 }
 
-                if (Probe(document, host, reading.CategoryKey, opening) is OpeningResult result)
+                if (document.GetElement(opening.UniqueId) is null)
+                {
+                    notProbed.Add($"{reading.CategoryKey} {opening.UniqueId}: no element to delete (a hole of the host's own outline)");
+                }
+                else if (Probe(document, host, reading.CategoryKey, opening) is OpeningResult result)
                 {
                     openings.Add(result);
+                    probed[reading.CategoryKey] = probed.GetValueOrDefault(reading.CategoryKey) + 1;
+                }
+                else
+                {
+                    notProbed.Add($"{reading.CategoryKey} {opening.UniqueId}: its host's layers could not be read");
                 }
             }
         }
 
         (List<OpeningResult> control, string? note) = Control(document, hosts);
-        return new Result(openings, control, note, document.IsModified);
+        return new Result(openings, notProbed, control, note, document.IsModified);
     }
 
     /// <summary>Null when the opening has no element to delete (a hole of the host's own outline) or the host no layers.</summary>
