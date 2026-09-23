@@ -33,22 +33,19 @@ if ($Smoke -and -not $PSBoundParameters.ContainsKey('CommandId')) {
     $CommandId = 'CustomCtrl_%CustomCtrl_%Add-Ins%Metrado%SmokeCommand'
 }
 
-Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, WindowsBase
-Add-Type -Namespace MetradoHarness -Name Mouse -MemberDefinition @'
-[DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
-[DllImport("user32.dll")] public static extern void mouse_event(uint f, uint x, uint y, uint d, UIntPtr e);
-[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
-[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+Add-Type -Namespace MetradoHarness -Name Dialog -MemberDefinition @'
+[DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
 '@
 
-# Revit 2027's own wording for the prompt, English and Spanish (es-ES
-# UIFrameworkRes, TaskDialog_Security_Unsigned_File_Loading), so a run under
-# a Spanish UI is answered too.
+# Revit 2027's own wording for the prompt's title and name label, English and
+# Spanish (es-ES UIFrameworkRes, TaskDialog_Security_Unsigned_File_Loading), so
+# a run under a Spanish UI is recognised too. Its buttons are pressed by id,
+# which no language changes: 1002 is Load Once ("Cargar una vez").
 $UnsignedPrompt = @{
-    Title   = @('Security - Unsigned Add-In', 'Seguridad - Complemento sin firma')
-    Name    = '(Name|Nombre)'
-    Owner   = '(Publisher|Fabricante):'
-    LoadOnce = @('Load Once', 'Cargar una vez')
+    Title    = @('Security - Unsigned Add-In', 'Seguridad - Complemento sin firma')
+    Name     = '(Name|Nombre)'
+    LoadOnce = 1002
 }
 
 function Confirm-OwnUnsignedAddIn {
@@ -64,26 +61,13 @@ function Confirm-OwnUnsignedAddIn {
         ForEach-Object { $_.Current.Name }) -join ' '
     if ($text -notmatch "(?m)^$($UnsignedPrompt.Name):[ \t]+(Metrado|Metrado host harness \(development only\))[ \t]*\r?$") { return }
 
-    # The command links expose no UI Automation pattern; a click is the only
-    # way in. It lands only if the prompt is in front and the point under the
-    # cursor is the button itself — otherwise nothing is clicked this round.
-    $button = $UnsignedPrompt.LoadOnce | ForEach-Object {
-        $prompt.FindFirst($scope, [System.Windows.Automation.PropertyCondition]::new($A::NameProperty, $_))
-    } | Where-Object { $_ } | Select-Object -First 1
-    if (-not $button) { return }
+    # The prompt is a native task dialog, and its command links expose no UI
+    # Automation pattern. TDM_CLICK_BUTTON presses Load Once by its id: no
+    # mouse, and no need for the prompt to be in front, which a minimised or
+    # disconnected remote session never lets it be.
     $handle = [IntPtr]$prompt.Current.NativeWindowHandle
-    [MetradoHarness.Mouse]::SetForegroundWindow($handle) | Out-Null
-    Start-Sleep -Milliseconds 300
-    if ([MetradoHarness.Mouse]::GetForegroundWindow() -ne $handle) { return }
-
-    $r = $button.Current.BoundingRectangle
-    $point = [System.Windows.Point]::new($r.X + $r.Width / 2, $r.Y + $r.Height / 2)
-    if ($A::FromPoint($point).Current.Name -ne $button.Current.Name) { return }
-
-    [MetradoHarness.Mouse]::SetCursorPos([int]$point.X, [int]$point.Y) | Out-Null
-    [MetradoHarness.Mouse]::mouse_event(0x02, 0, 0, 0, [UIntPtr]::Zero)
-    [MetradoHarness.Mouse]::mouse_event(0x04, 0, 0, 0, [UIntPtr]::Zero)
-    Write-Host "Answered $($button.Current.Name) for: $(($text -split $UnsignedPrompt.Owner)[0].Trim())"
+    [MetradoHarness.Dialog]::PostMessage($handle, 0x0466, [IntPtr]$UnsignedPrompt.LoadOnce, [IntPtr]::Zero) | Out-Null
+    Write-Host "Answered Load Once for: $($Matches[2])"
 }
 
 if (Get-Process -Name Revit -ErrorAction SilentlyContinue) {
