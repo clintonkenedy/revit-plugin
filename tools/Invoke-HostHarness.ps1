@@ -17,7 +17,7 @@ param(
     [Parameter(Mandatory)] [string] $Model,
     [string] $CommandId = 'CustomCtrl_%CustomCtrl_%Add-Ins%Metrado%ExportTakeoffCommand',
     [string] $ReportPath = (Join-Path ([IO.Path]::GetTempPath()) "metrado-harness-$([guid]::NewGuid()).json"),
-    [ValidateSet('command', 'probe-walls', 'probe-area-settings', 'probe-hosts', 'probe-materials', 'probe-layers')] [string] $Mode = 'command',
+    [ValidateSet('command', 'probe-walls', 'probe-area-settings', 'probe-hosts', 'probe-materials', 'probe-layers', 'probe-layer-openings')] [string] $Mode = 'command',
     [int] $MaxWalls = 30,
     [int] $TimeoutSeconds = 600,
     [string] $RevitExe = 'D:\autodesk\producto\Revit 2027\Revit.exe',
