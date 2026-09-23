@@ -11,6 +11,7 @@ namespace Metrado.Revit2027;
 /// <param name="ComputedAreaSquareFeet">Null when the host carries no readable, finite computed area.</param>
 /// <param name="Openings">Openings measured individually.</param>
 /// <param name="Unmeasured">Openings Revit subtracted whose own area could not be measured.</param>
+/// <param name="Layers">The host's layers, read only when its category is taken off by material layer.</param>
 public sealed record HostReading(
     string UniqueId,
     string CategoryKey,
@@ -22,7 +23,8 @@ public sealed record HostReading(
     IReadOnlyList<OpeningReading> Openings,
     IReadOnlyList<UnmeasuredOpening> Unmeasured,
     string? Keynote = null,
-    IReadOnlyDictionary<string, string?>? SharedParameters = null);
+    IReadOnlyDictionary<string, string?>? SharedParameters = null,
+    LayerReading? Layers = null);
 
 /// <summary>One opening Revit subtracted from a host, read on its own and never summed.</summary>
 public sealed record OpeningReading(string UniqueId, double AreaSquareFeet);
@@ -49,16 +51,33 @@ public static class HostTakeoff
     /// <summary>The source the built-in Walls, Floors and Roofs criteria read.</summary>
     public const string ComputedAreaSource = "HOST_AREA_COMPUTED";
 
-    /// <param name="reading">The host as read, in square feet.</param>
-    /// <param name="squareFeetToSquareMetres">
-    /// Inside Revit, <c>UnitUtils.ConvertFromInternalUnits</c> to square metres.
-    /// Injected rather than written here as a factor, so the conversion stays
-    /// Revit's own and this mapping stays runnable outside it.
-    /// </param>
+    /// <summary>A host not taken off by layer, which needs square metres only.</summary>
+    /// <exception cref="ArgumentException">The reading has layers, which need volumes and widths converted too.</exception>
     public static ElementTakeoff From(HostReading reading, Func<double, double> squareFeetToSquareMetres)
     {
         ArgumentNullException.ThrowIfNull(reading);
         ArgumentNullException.ThrowIfNull(squareFeetToSquareMetres);
+
+        return reading.Layers is null
+            ? From(reading, new SeamUnits(squareFeetToSquareMetres, NotLayered, NotLayered))
+            : throw new ArgumentException("A layered host needs cubic metres and metres converted too.", nameof(reading));
+    }
+
+    /// <param name="reading">The host as read, in Revit's internal units.</param>
+    /// <param name="units">
+    /// Inside Revit, <c>UnitUtils.ConvertFromInternalUnits</c>. Injected rather
+    /// than written here as factors, so the conversions stay Revit's own and
+    /// this mapping stays runnable outside it.
+    /// </param>
+    public static ElementTakeoff From(HostReading reading, SeamUnits units)
+    {
+        ArgumentNullException.ThrowIfNull(reading);
+        ArgumentNullException.ThrowIfNull(units);
+
+        Func<double, double> squareFeetToSquareMetres = units.SquareMetres;
+        (IReadOnlyList<RawQuantity> layered, LayerStructure? structure) = reading.Layers is LayerReading layers
+            ? LayerTakeoff.From(layers, units)
+            : ([], null);
 
         // Rounded to the nano-square-metre: far below any real quantity, and
         // enough to keep the feet round trip's noise from deciding whether an
@@ -78,12 +97,16 @@ public static class HostTakeoff
                 sharedParameters: reading.SharedParameters ?? new Dictionary<string, string?>()),
             // No quantity rather than zero: the domain then reports that no
             // source had a value, instead of pricing the host at nothing.
-            Quantities: reading.ComputedAreaSquareFeet is double area
+            Quantities: [.. reading.ComputedAreaSquareFeet is double area
                 ? [new RawQuantity(ComputedAreaSource, SquareMetres(area))]
-                : [],
+                : Array.Empty<RawQuantity>(), .. layered],
             Openings: [.. reading.Openings.Select(opening =>
-                new OpeningQuantity(opening.UniqueId, SquareMetres(opening.AreaSquareFeet)))]);
+                new OpeningQuantity(opening.UniqueId, SquareMetres(opening.AreaSquareFeet)))],
+            Layers: structure);
     }
+
+    private static double NotLayered(double value) =>
+        throw new InvalidOperationException("Only a layered host converts volumes or widths.");
 
     /// <summary>
     /// One warning per opening that cuts the host but could not be measured.
@@ -112,7 +135,7 @@ public static class HostTakeoff
             $"This in-place {Noun(categoryKey)} is a family instance with no computed area, which Metrado does not measure: "
             + $"it is in no line of the budget. Measure it by hand, or model it as a {Noun(categoryKey)}.");
 
-    private static string Noun(string categoryKey) => categoryKey switch
+    internal static string Noun(string categoryKey) => categoryKey switch
     {
         WallsKey => "wall",
         FloorsKey => "floor",
