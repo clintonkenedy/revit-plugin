@@ -324,6 +324,26 @@ public static class Measurement
         value.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>
+    /// Whether the rule adds this opening back — the decision <see cref="Apply"/>
+    /// makes for it, exposed so a report can say which way the rule went
+    /// without restating the rule.
+    /// </summary>
+    /// <exception cref="ArgumentException">The opening is not in the threshold's unit.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The threshold's mode is not a declared member.</exception>
+    public static bool IsAddedBack(Quantity opening, OpeningsThreshold threshold)
+    {
+        RequireDeclaredMode(threshold);
+        if (opening.Unit != threshold.Unit)
+        {
+            throw new ArgumentException(
+                $"The opening is in {opening.Unit} and the threshold in {threshold.Unit}; the rule never compares across units.",
+                nameof(opening));
+        }
+
+        return IsNotDeducted(opening, threshold);
+    }
+
+    /// <summary>
     /// Whether the norm keeps this opening's material in the metrado — that is,
     /// whether Revit's deduction of it must be added back.
     /// </summary>
