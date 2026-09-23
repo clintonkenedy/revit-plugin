@@ -33,6 +33,7 @@ Absence is never an error; a supplied file is never ignored:
 | `Found(text)` and it parses | `Ok(Merge(Default, overrides))` | `File` |
 | `Found(text)` and malformed / unknown category / unsupported unit / negative threshold / invalid mode | `Err(ConfigError)` — run stops, no workbook | — |
 | `Unreadable(ConfigError)` — the file exists and I/O or permissions refused it | `Err(ConfigError)`, the locator's own, naming the file — run stops, no workbook | — |
+| `Found(text)`, it parses, and a category extraction reads names a source extraction does not read for it (PR 24, after review) | the command's own `ConfigError` from `ReadableSources`, naming the category, the sources and what extraction reads — run stops before the model is read, no workbook | — |
 
 **I1 staging.** The criteria-file requirement is tagged I2 and its reader is task 2.1, so I1 ships no parser and the `Found` row above has no implementation yet. I1 therefore answers `Found` with `Err(ConfigError)` naming the file and stating that this version cannot read criteria files — because the specification's "MUST NOT silently fall back to defaults when a file was supplied" is unconditional and does not ask *why* the file could not be honoured. That error carries no `ConfigLocation`: nothing was parsed, and reporting line 0 would send the estimator hunting a syntax error in a file that is probably valid. Task 2.1 replaces that one branch.
 
