@@ -43,11 +43,13 @@
     <PackageReference Include="System.Reflection.MetadataLoadContext" Version="10.0.0" />
     <PackageReference Include="Nice3point.Revit.Api.RevitAPI" Version="2027.2.0" ExcludeAssets="all" GeneratePathProperty="true" />
     <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="2027.2.0" ExcludeAssets="all" GeneratePathProperty="true" />
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPIIFC" Version="2027.2.0" ExcludeAssets="all" GeneratePathProperty="true" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="$(PkgNice3point_Revit_Api_RevitAPI)\ref\net10.0-windows7.0\RevitAPI.dll" Link="RevitApi\RevitAPI.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
     <None Include="$(PkgNice3point_Revit_Api_RevitAPIUI)\ref\net10.0-windows7.0\RevitAPIUI.dll" Link="RevitApi\RevitAPIUI.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+    <None Include="$(PkgNice3point_Revit_Api_RevitAPIIFC)\ref\net10.0-windows7.0\RevitAPIIFC.dll" Link="RevitApi\RevitAPIIFC.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
   </ItemGroup>
 
   <!--
