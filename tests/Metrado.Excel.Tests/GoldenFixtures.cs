@@ -47,9 +47,10 @@ internal static class GoldenFixtures
     /// Four layered walls: walls-01 is the spec's scenario, three materials
     /// under one UniqueId, and the domain suite's worked wall; walls-02
     /// plasters both faces with one material, one line over two layers;
-    /// walls-03 has two plasters in one partida, the exterior one the wider
-    /// and last by name; walls-04 has two materials nobody keyed, the
-    /// exterior one likewise.
+    /// walls-03 has two plasters of one width in one partida, the exterior one
+    /// last by name; walls-04 has two materials nobody keyed, the exterior one
+    /// on both faces and last by name. So neither name, width nor last-layer
+    /// order passes for the first layer's.
     /// </summary>
     internal static TakeoffResult MaterialLayers() =>
         TakeoffFixture.ResultOf(
@@ -59,9 +60,9 @@ internal static class GoldenFixtures
             TakeoffFixture.LayerLine("walls-02", "02.04.01", 26.22, "Tarrajeo frotachado 1:5", (LayerFunction.Finish1, 0.015), (LayerFunction.Finish2, 0.015)),
             TakeoffFixture.LayerLine("walls-02", "02.01.01", 13.11, "Ladrillo KK 18 huecos", (LayerFunction.Structure, 0.130)),
             TakeoffFixture.LayerLine("walls-03", "02.04.01", 13.11, "Tarrajeo frotachado 1:5", (LayerFunction.Finish2, 0.015)),
-            TakeoffFixture.LayerLine("walls-03", "02.04.01", 13.11, "Tarrajeo impermeabilizado 1:4", (LayerFunction.Finish1, 0.020)),
+            TakeoffFixture.LayerLine("walls-03", "02.04.01", 13.11, "Tarrajeo impermeabilizado 1:4", (LayerFunction.Finish1, 0.015)),
             TakeoffFixture.LayerLine("walls-04", UnclassifiedResolver.Code, 9.5, "Air", (LayerFunction.Insulation, 0.020)),
-            TakeoffFixture.LayerLine("walls-04", UnclassifiedResolver.Code, 9.5, "Sheathing", (LayerFunction.Substrate, 0.025)));
+            TakeoffFixture.LayerLine("walls-04", UnclassifiedResolver.Code, 9.5, "Sheathing", (LayerFunction.Substrate, 0.010), (LayerFunction.Finish2, 0.010)));
 
     /// <summary>
     /// Forty measured walls and floors, twelve of which no link of the chain could

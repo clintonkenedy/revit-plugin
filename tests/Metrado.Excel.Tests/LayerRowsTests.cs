@@ -45,13 +45,13 @@ public sealed class LayerRowsTests
 
     /// <summary>
     /// Two lines of one host in one partida come exterior first, whatever
-    /// order they arrive in: the exterior plaster here is the wider and sorts
-    /// last by name, so neither order passes for the layers'.
+    /// order they arrive in: the exterior plaster sorts last by name, and the
+    /// two are as wide, so a sort by width either way keeps them as they came.
     /// </summary>
     [Fact]
     public void LinesOfOneHostComeExteriorFirst()
     {
-        Linea exterior = TakeoffFixture.LayerLine("walls-03", "02.04.01", 13.11, "Tarrajeo impermeabilizado 1:4", (LayerFunction.Finish1, 0.020));
+        Linea exterior = TakeoffFixture.LayerLine("walls-03", "02.04.01", 13.11, "Tarrajeo impermeabilizado 1:4", (LayerFunction.Finish1, 0.015));
         Linea interior = TakeoffFixture.LayerLine("walls-03", "02.04.01", 13.11, "Tarrajeo frotachado 1:5", (LayerFunction.Finish2, 0.015));
 
         using XLWorkbook workbook = WrittenWorkbook.Of(TakeoffFixture.ResultOf(interior, exterior));
@@ -76,7 +76,7 @@ public sealed class LayerRowsTests
         Assert.Equal(["Tarrajeo frotachado 1:5", "Empaste"], Lines(sheet).Select(row => Text(sheet, row, "Material")));
     }
 
-    /// <summary>A material's layers are written in its type's order, which a flipped type makes neither by function nor by width.</summary>
+    /// <summary>A material's layers are written in its type's order, which here is neither by function nor by width, either way.</summary>
     [Fact]
     public void TheLayersTextFollowsTheTypesOrder()
     {
@@ -86,13 +86,17 @@ public sealed class LayerRowsTests
         {
             Layer = new MaterialLayers(
                 line.Layer.Material,
-                [new CompoundLayer(0, LayerFunction.Finish2, new Quantity(0.020, QuantityUnit.Metre), id), new CompoundLayer(5, LayerFunction.Finish1, new Quantity(0.015, QuantityUnit.Metre), id)]),
+                [
+                    new CompoundLayer(0, LayerFunction.Finish2, new Quantity(0.015, QuantityUnit.Metre), id),
+                    new CompoundLayer(1, LayerFunction.Substrate, new Quantity(0.025, QuantityUnit.Metre), id),
+                    new CompoundLayer(5, LayerFunction.Finish1, new Quantity(0.020, QuantityUnit.Metre), id),
+                ]),
         };
 
         using XLWorkbook workbook = WrittenWorkbook.Of(TakeoffFixture.ResultOf(line));
         IXLWorksheet sheet = workbook.Worksheet(Budget);
 
-        Assert.Equal("Finish2 20 mm + Finish1 15 mm", Text(sheet, Lines(sheet).Single(), "Layers"));
+        Assert.Equal("Finish2 15 mm + Substrate 25 mm + Finish1 20 mm", Text(sheet, Lines(sheet).Single(), "Layers"));
     }
 
     [Fact]
@@ -120,13 +124,18 @@ public sealed class LayerRowsTests
         Assert.Equal("Metal Stud Layer", WrittenWorkbook.Text(sheet, 3, row, "Material"));
     }
 
-    /// <summary>One element with two uncoded materials is two lines to key, and the sheet counts the lines it lists.</summary>
+    /// <summary>
+    /// One element with two uncoded materials is two lines to key, and the
+    /// sheet counts the lines it lists; they come by first layer, the exterior
+    /// sheathing on both faces sorting last by name, by last layer and, as
+    /// wide as the air, keeping its place under a width sort.
+    /// </summary>
     [Fact]
     public void TheUnclassifiedSheetCountsTheLinesItLists()
     {
         using XLWorkbook workbook = WrittenWorkbook.Of(TakeoffFixture.ResultOf(
             TakeoffFixture.LayerLine("walls-04", UnclassifiedResolver.Code, 9.5, "Air", (LayerFunction.Insulation, 0.020)),
-            TakeoffFixture.LayerLine("walls-04", UnclassifiedResolver.Code, 9.5, "Sheathing", (LayerFunction.Substrate, 0.025))));
+            TakeoffFixture.LayerLine("walls-04", UnclassifiedResolver.Code, 9.5, "Sheathing", (LayerFunction.Substrate, 0.010), (LayerFunction.Finish2, 0.010))));
         IXLWorksheet sheet = workbook.Worksheet("Unclassified");
 
         Assert.Equal(("Unclassified lines", 2), (sheet.Cell(1, 1).GetString(), sheet.Cell(2, 2).GetValue<int>()));
