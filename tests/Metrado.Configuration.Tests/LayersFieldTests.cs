@@ -42,6 +42,11 @@ public sealed class LayersFieldTests
     [InlineData("Finish1", "m3")]
     [InlineData("Finish2", "m3")]
     [InlineData("StructuralDeck", "m3")]
+    [InlineData("Structure", "m2")]
+    [InlineData("Substrate", "m2")]
+    [InlineData("Insulation", "m2")]
+    [InlineData("Finish1", "m2")]
+    [InlineData("Finish2", "m2")]
     [InlineData("Membrane", "m2")]
     [InlineData("StructuralDeck", "m2")]
     public void EveryFunctionIsStatedInTheUnitsItAllows(string function, string unit)
