@@ -27,7 +27,8 @@ internal static class TakeoffFixture
         string capitulo = "Walls",
         string family = "Basic Wall",
         string typeName = "Generic - 200mm",
-        BoundaryMode appliedMode = BoundaryMode.Exclusive)
+        BoundaryMode appliedMode = BoundaryMode.Exclusive,
+        QuantityUnit unit = QuantityUnit.SquareMetre)
     {
         ElementTakeoff element = new(
             UniqueId: uniqueId,
@@ -42,7 +43,7 @@ internal static class TakeoffFixture
             Quantities: [],
             Openings: []);
 
-        Quantity quantity = new(metrado, QuantityUnit.SquareMetre);
+        Quantity quantity = new(metrado, unit);
 
         return new Linea(
             element,

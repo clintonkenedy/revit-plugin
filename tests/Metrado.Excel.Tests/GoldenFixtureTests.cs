@@ -70,7 +70,7 @@ public sealed class GoldenFixtureTests
         IXLWorksheet budget = workbook.Worksheet(BudgetSheet);
 
         Assert.Equal(
-            ["Level", "Capitulo", "Partida", "UniqueId", "Metrado", "Boundary mode"],
+            ["Level", "Capitulo", "Partida", "UniqueId", "Metrado", "Unit", "Boundary mode"],
             WrittenWorkbook.RowText(budget, BudgetHeaderRow));
         Assert.Equal(0, budget.Cell(SummaryRow, 2).GetDouble());
         Assert.Equal(0, workbook.Worksheet(UnclassifiedSheet).Cell(2, 2).GetDouble());

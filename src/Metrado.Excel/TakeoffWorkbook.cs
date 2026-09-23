@@ -34,7 +34,8 @@ public static class TakeoffWorkbook
     private const int PartidaColumn = 3;
     private const int UniqueIdColumn = 4;
     private const int MetradoColumn = 5;
-    private const int BoundaryModeColumn = 6;
+    private const int UnitColumn = 6;
+    private const int BoundaryModeColumn = 7;
 
     private const string CapituloLevel = "CAPITULO";
     private const string PartidaLevel = "PARTIDA";
@@ -96,6 +97,7 @@ public static class TakeoffWorkbook
         sheet.Cell(HeaderRow, PartidaColumn).Value = "Partida";
         sheet.Cell(HeaderRow, UniqueIdColumn).Value = "UniqueId";
         sheet.Cell(HeaderRow, MetradoColumn).Value = "Metrado";
+        sheet.Cell(HeaderRow, UnitColumn).Value = "Unit";
         sheet.Cell(HeaderRow, BoundaryModeColumn).Value = "Boundary mode";
 
         int row = HeaderRow + 1;
@@ -104,7 +106,12 @@ public static class TakeoffWorkbook
         {
             sheet.Cell(row, LevelColumn).Value = CapituloLevel;
             sheet.Cell(row, CapituloColumn).Value = capitulo.Key;
-            sheet.Cell(row, MetradoColumn).Value = CapituloTotal(capitulo);
+            if (capitulo.Select(partida => partida.Unit).Distinct().Count() == 1)
+            {
+                sheet.Cell(row, MetradoColumn).Value = CapituloTotal(capitulo);
+                sheet.Cell(row, UnitColumn).Value = capitulo.First().Unit.Symbol();
+            }
+
             row++;
 
             foreach (Partida partida in capitulo)
@@ -113,6 +120,7 @@ public static class TakeoffWorkbook
                 sheet.Cell(row, CapituloColumn).Value = capitulo.Key;
                 sheet.Cell(row, PartidaColumn).Value = partida.Key.PartidaCode;
                 sheet.Cell(row, MetradoColumn).Value = partida.Total.Value;
+                sheet.Cell(row, UnitColumn).Value = partida.Unit.Symbol();
                 row++;
 
                 foreach (Linea linea in InOrder(partida))
@@ -122,6 +130,7 @@ public static class TakeoffWorkbook
                     sheet.Cell(row, PartidaColumn).Value = partida.Key.PartidaCode;
                     sheet.Cell(row, UniqueIdColumn).Value = linea.Element.UniqueId;
                     sheet.Cell(row, MetradoColumn).Value = linea.Metrado.Metrado.Value;
+                    sheet.Cell(row, UnitColumn).Value = linea.Metrado.Metrado.Unit.Symbol();
                     sheet.Cell(row, BoundaryModeColumn).Value = Name(linea.Metrado.AppliedMode);
                     row++;
                 }
@@ -263,10 +272,10 @@ public static class TakeoffWorkbook
     /// never spent by the writer.
     /// <para>
     /// The partida totals themselves come from <see cref="Partida.Total"/>, which
-    /// already refuses to add lines measured in different units. Across partidas of
-    /// one capitulo the same guarantee holds structurally in I1 — one capitulo is
-    /// one criterion, so one unit — and the per-partida unit that would make it
-    /// checkable in the workbook arrives with the I2 unit column.
+    /// refuses to add lines measured in different units. A capitulo is totalled
+    /// only when its partidas share one unit, which one criterion per category
+    /// guarantees; otherwise its row states no total rather than one that adds
+    /// m2 to u (<c>excel-budget-export</c>, "Unit Reported per Partida").
     /// </para>
     /// </remarks>
     private static double CapituloTotal(IEnumerable<Partida> partidas) =>
