@@ -56,9 +56,11 @@ function Confirm-OwnUnsignedAddIn {
     } | Where-Object { $_ } | Select-Object -First 1
     if (-not $prompt) { return }
 
+    # One line per text element, as the prompt shows them: the instruction
+    # comes first, so joined by spaces "Name:" would never start a line.
     $text = ($prompt.FindAll($scope, [System.Windows.Automation.PropertyCondition]::new(
         $A::ControlTypeProperty, [System.Windows.Automation.ControlType]::Text)) |
-        ForEach-Object { $_.Current.Name }) -join ' '
+        ForEach-Object { $_.Current.Name }) -join "`n"
     if ($text -notmatch "(?m)^$($UnsignedPrompt.Name):[ \t]+(Metrado|Metrado host harness \(development only\))[ \t]*\r?$") { return }
 
     # The prompt is a native task dialog, and its command links expose no UI
@@ -73,7 +75,6 @@ function Confirm-OwnUnsignedAddIn {
 if (Get-Process -Name Revit -ErrorAction SilentlyContinue) {
     throw 'Revit is already running. The harness needs a session of its own; close Revit and run again.'
 }
-if (-not (Test-Path $Model)) { throw "Model '$Model' not found." }
 
 # Revit keeps the language it last ran in ([Language] Select= in Revit.ini,
 # UTF-16) and starts in it from then on. A run in another language puts the
@@ -91,7 +92,24 @@ function Restore-LanguageChoice([string] $choice) {
     if ($choice) { $lines[$at + 1] = $choice } else { $lines.RemoveRange($at, 2) }
     Set-Content $revitIni $lines -Encoding Unicode
 }
-$languageChoice = if ($Language -and (Test-Path $revitIni)) { Get-LanguageChoice } else { $null }
+# The choice to put back is kept on disk until it is put back, so a run that
+# died before Revit exited (a closed console, a killed runner) is repaired by
+# the next run, which starts only when no Revit is running.
+$languageMarker = Join-Path $env:LOCALAPPDATA 'Metrado\harness-language-choice.txt'
+if (Test-Path $languageMarker) {
+    $left = (Get-Content $languageMarker -Raw).Trim()
+    Restore-LanguageChoice $(if ($left) { $left } else { $null })
+    Remove-Item $languageMarker
+    Write-Host "Put back Revit's language choice ('$left') left by an interrupted run."
+}
+if (-not (Test-Path $Model)) { throw "Model '$Model' not found." }
+
+$languageChoice = $null
+if ($Language -and (Test-Path $revitIni)) {
+    $languageChoice = Get-LanguageChoice
+    New-Item -ItemType Directory (Split-Path $languageMarker) -Force | Out-Null
+    Set-Content $languageMarker "$languageChoice"
+}
 
 $project = Join-Path $PSScriptRoot 'Metrado.HostHarness\Metrado.HostHarness.csproj'
 $folder = Join-Path $AddinsRoot 'Metrado.HostHarness'
@@ -144,11 +162,14 @@ finally {
     Remove-Item $request -Force -ErrorAction SilentlyContinue
     if ($revit -and -not $revit.HasExited) {
         Write-Warning "Revit is still running; '$folder' stays until it exits. Without its manifest the harness is inert."
-        if ($Language) { Write-Warning "Revit.ini still selects $Language; set [Language] back to '$languageChoice' once Revit exits." }
+        if ($Language) { Write-Warning "Revit.ini still selects $Language; the next run puts '$languageChoice' back, or set it once Revit exits." }
     }
     else {
         Remove-Item $folder -Recurse -Force -ErrorAction SilentlyContinue
-        if ($Language -and (Test-Path $revitIni)) { Restore-LanguageChoice $languageChoice }
+        if ($Language -and (Test-Path $revitIni)) {
+            Restore-LanguageChoice $languageChoice
+            Remove-Item $languageMarker -ErrorAction SilentlyContinue
+        }
     }
 }
 
