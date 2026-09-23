@@ -19,7 +19,11 @@ public sealed record Box(double UMin, double UMax, double ZMin, double ZMax);
 /// <param name="HostedByWall">This wall, not a joined one, hosts the insert.</param>
 /// <param name="IsVoidCut">An unattached void instance cutting the wall.</param>
 /// <param name="CutoutSquareFeet">The area of the insert's outline in the wall, when one could be computed.</param>
-/// <param name="Outline">The outline's range along the wall, when one could be computed.</param>
+/// <param name="Outline">
+/// The outline's range along the wall, or a range known to contain it (a
+/// bounding box) when the outline itself is unavailable; null only when the
+/// insert cannot be located at all. Overlaps are judged on it.
+/// </param>
 public sealed record InsertFacts(
     string UniqueId,
     InsertKind Kind,
@@ -75,17 +79,26 @@ public static class OpeningPolicy
             }
         }
 
-        HashSet<string> overlapping = [.. trusted
-            .SelectMany(a => trusted.Where(b => b != a && Overlap(a.Outline!, b.Outline!)).Select(_ => a.UniqueId))];
+        // Revit deducts overlapping cuts' union once, so an opening sharing
+        // area with any other cut — measurable or not — cannot keep its own
+        // outline. A cut that cannot be located at all rules every overlap
+        // out of reach, and with it every opening of the wall.
+        List<InsertFacts> cutting = [.. inserts.Where(insert => insert.CutsWall)];
+        bool unlocatable = cutting.Any(insert => insert.Outline is null);
 
-        foreach (InsertFacts insert in trusted.Where(insert => overlapping.Contains(insert.UniqueId)))
-        {
-            unmeasured.Add(new UnmeasuredOpening(
-                insert.UniqueId, "its outline overlaps another opening's, and Revit deducts their union only once"));
-        }
+        Dictionary<string, string> distrusted = trusted
+            .Select(a => (a.UniqueId, Reason: unlocatable
+                ? "another cut in this wall cannot be located, so an overlap with it cannot be ruled out"
+                : cutting.Any(b => b != a && Overlap(a.Outline!, b.Outline!))
+                    ? "its outline overlaps another cut in this wall, and Revit deducts their union only once"
+                    : null))
+            .Where(entry => entry.Reason is not null)
+            .ToDictionary(entry => entry.UniqueId, entry => entry.Reason!);
+
+        unmeasured.AddRange(distrusted.Select(entry => new UnmeasuredOpening(entry.Key, entry.Value)));
 
         return new OpeningDecision(
-            [.. trusted.Where(insert => !overlapping.Contains(insert.UniqueId))
+            [.. trusted.Where(insert => !distrusted.ContainsKey(insert.UniqueId))
                 .Select(insert => new OpeningReading(insert.UniqueId, insert.CutoutSquareFeet!.Value))],
             [.. unmeasured.OrderBy(opening => inserts.ToList().FindIndex(insert => insert.UniqueId == opening.UniqueId))]);
     }

@@ -78,6 +78,51 @@ public sealed class OpeningPolicyTests
         Assert.All(decision.Unmeasured, opening => Assert.Contains("overlaps", opening.Reason));
     }
 
+    /// <summary>
+    /// The overlap that mattered on the Snowdon sample: three doors inside an
+    /// embedded curtain wall. The embedded wall cannot be measured, yet it
+    /// still removes the doors' area — deleting one door restored 0.30 m2
+    /// while its outline claimed 5.49 m2. Any cutting insert's outline, even
+    /// an unmeasurable one's, rules an overlapping opening out.
+    /// </summary>
+    [Fact]
+    public void AnOpeningOverlappingAnUnmeasurableCutIsReported()
+    {
+        OpeningDecision decision = Decide(
+            Door() with { UniqueId = "door", Outline = new Box(2, 4, 0, 7) },
+            Door() with { UniqueId = "embedded", Kind = InsertKind.EmbeddedWall, CutoutSquareFeet = null, Outline = new Box(1, 9, 0, 9) });
+
+        Assert.Empty(decision.Measured);
+        Assert.Contains(decision.Unmeasured, opening => opening.UniqueId == "door" && opening.Reason.Contains("overlaps"));
+    }
+
+    /// <summary>
+    /// When a cutting insert cannot even be located, no overlap with it can be
+    /// ruled out, so no opening of that wall is measured.
+    /// </summary>
+    [Fact]
+    public void AnUnlocatableCutReportsEveryOpeningOfTheWall()
+    {
+        OpeningDecision decision = Decide(
+            Door() with { UniqueId = "door" },
+            Door() with { UniqueId = "somewhere", Kind = InsertKind.Other, CutoutSquareFeet = null, Outline = null });
+
+        Assert.Empty(decision.Measured);
+        Assert.Contains(decision.Unmeasured, opening => opening.UniqueId == "door" && opening.Reason.Contains("cannot be located"));
+    }
+
+    /// <summary>An insert that cuts nothing cannot overlap anything that matters.</summary>
+    [Fact]
+    public void ANonCuttingInsertNeverRulesAnOpeningOut()
+    {
+        OpeningDecision decision = Decide(
+            Door() with { UniqueId = "door", Outline = new Box(2, 4, 0, 7) },
+            Door() with { UniqueId = "elsewhere", CutsWall = false, Outline = new Box(1, 9, 0, 9) },
+            Door() with { UniqueId = "unlocated", CutsWall = false, Outline = null });
+
+        Assert.Equal(["door"], decision.Measured.Select(opening => opening.UniqueId));
+    }
+
     [Fact]
     public void OutlinesThatOnlyTouchDoNotOverlap()
     {
