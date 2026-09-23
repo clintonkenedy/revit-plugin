@@ -115,10 +115,80 @@ public sealed class WallTakeoffTests
         Assert.Empty(takeoff.Codes.SharedParameters);
     }
 
+    /// <summary>
+    /// A wall whose area could not be read reaches the domain with no quantity,
+    /// which the domain reports as "no source had a value" — never as a
+    /// measured 0.0, which would price the wall at nothing without a word.
+    /// </summary>
+    [Fact]
+    public void AnUnreadableComputedAreaGivesNoQuantityNotZero()
+    {
+        ElementTakeoff takeoff = WallTakeoff.From(Reading(computedArea: null), Doubled);
+
+        Assert.Empty(takeoff.Quantities);
+    }
+
+    /// <summary>
+    /// Double precision noise from the feet-to-metres round trip must not
+    /// decide the product's boundary case: an opening modelled at exactly the
+    /// threshold has to compare as exactly the threshold.
+    /// </summary>
+    [Fact]
+    public void ConvertedQuantitiesAreRoundedToTheNanoSquareMetre()
+    {
+        WallReading reading = Reading(computedArea: 1.0, openings: [new OpeningReading("window-1", 1.0)]);
+
+        ElementTakeoff takeoff = WallTakeoff.From(reading, _ => 0.9999999999999999);
+
+        Assert.Equal(1.0, Assert.Single(takeoff.Quantities).Amount.Value);
+        Assert.Equal(1.0, Assert.Single(takeoff.Openings).Amount.Value);
+    }
+
+    /// <summary>The rounding removes noise only: a real ninth decimal survives it.</summary>
+    [Fact]
+    public void RoundingKeepsEveryRealDecimal()
+    {
+        ElementTakeoff takeoff = WallTakeoff.From(Reading(), _ => 1.234567891);
+
+        Assert.Equal(1.234567891, Assert.Single(takeoff.Quantities).Amount.Value);
+    }
+
+    /// <summary>
+    /// An opening whose area cannot be measured is never given one. It stays
+    /// out of the openings — so Revit's deduction of it stands and it is never
+    /// added back — and is reported, by identity and reason, instead.
+    /// </summary>
+    [Fact]
+    public void AnUnmeasuredOpeningIsReportedNeverMeasured()
+    {
+        WallReading reading = Reading(unmeasured:
+        [
+            new UnmeasuredOpening("shadow-window", "cuts this wall but is hosted by another"),
+        ]);
+
+        ElementTakeoff takeoff = WallTakeoff.From(reading, Doubled);
+        ValidationWarning warning = Assert.Single(WallTakeoff.Warnings(takeoff, reading));
+
+        Assert.DoesNotContain(takeoff.Openings, opening => opening.UniqueId == "shadow-window");
+        Assert.Equal("wall-unique-id", warning.UniqueId);
+        Assert.Equal("Walls", warning.CategoryName);
+        Assert.Contains("shadow-window", warning.Condition);
+        Assert.Contains("cuts this wall but is hosted by another", warning.Condition);
+    }
+
+    [Fact]
+    public void AWallWithEveryOpeningMeasuredHasNoWarnings()
+    {
+        WallReading reading = Reading();
+
+        Assert.Empty(WallTakeoff.Warnings(WallTakeoff.From(reading, Doubled), reading));
+    }
+
     private static WallReading Reading(
-        double computedArea = 100.0,
+        double? computedArea = 100.0,
         string? assemblyCode = "B2010",
-        IReadOnlyList<OpeningReading>? openings = null) =>
+        IReadOnlyList<OpeningReading>? openings = null,
+        IReadOnlyList<UnmeasuredOpening>? unmeasured = null) =>
         new(
             UniqueId: "wall-unique-id",
             FamilyName: "Basic Wall",
@@ -126,5 +196,6 @@ public sealed class WallTakeoffTests
             TypeUniqueId: "type-unique-id",
             AssemblyCode: assemblyCode,
             ComputedAreaSquareFeet: computedArea,
-            Openings: openings ?? [new OpeningReading("door-1", 21.0)]);
+            Openings: openings ?? [new OpeningReading("door-1", 21.0)],
+            Unmeasured: unmeasured ?? []);
 }

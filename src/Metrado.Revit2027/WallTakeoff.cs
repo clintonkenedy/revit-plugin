@@ -7,17 +7,24 @@ namespace Metrado.Revit2027;
 /// before any conversion. Holds no Revit type, so the step from reading to
 /// <see cref="ElementTakeoff"/> can be proved without Revit running.
 /// </summary>
+/// <param name="ComputedAreaSquareFeet">Null when the wall carries no readable, finite computed area.</param>
+/// <param name="Openings">Openings measured individually.</param>
+/// <param name="Unmeasured">Openings Revit subtracted whose own area could not be measured.</param>
 public sealed record WallReading(
     string UniqueId,
     string FamilyName,
     string TypeName,
     string TypeUniqueId,
     string? AssemblyCode,
-    double ComputedAreaSquareFeet,
-    IReadOnlyList<OpeningReading> Openings);
+    double? ComputedAreaSquareFeet,
+    IReadOnlyList<OpeningReading> Openings,
+    IReadOnlyList<UnmeasuredOpening> Unmeasured);
 
 /// <summary>One opening Revit subtracted from a wall, read on its own and never summed.</summary>
 public sealed record OpeningReading(string UniqueId, double AreaSquareFeet);
+
+/// <summary>An opening that cuts the wall but whose area could not be measured, and why.</summary>
+public sealed record UnmeasuredOpening(string UniqueId, string Reason);
 
 /// <summary>
 /// Turns a <see cref="WallReading"/> into the domain's <see cref="ElementTakeoff"/>.
@@ -45,8 +52,11 @@ public static class WallTakeoff
         ArgumentNullException.ThrowIfNull(reading);
         ArgumentNullException.ThrowIfNull(squareFeetToSquareMetres);
 
+        // Rounded to the nano-square-metre: far below any real quantity, and
+        // enough to keep the feet round trip's noise from deciding whether an
+        // opening modelled at exactly the threshold is added back.
         Quantity SquareMetres(double squareFeet) =>
-            new(squareFeetToSquareMetres(squareFeet), QuantityUnit.SquareMetre);
+            new(Math.Round(squareFeetToSquareMetres(squareFeet), 9), QuantityUnit.SquareMetre);
 
         return new ElementTakeoff(
             UniqueId: reading.UniqueId,
@@ -58,8 +68,29 @@ public static class WallTakeoff
                 reading.AssemblyCode,
                 keynote: null,
                 sharedParameters: new Dictionary<string, string?>()),
-            Quantities: [new RawQuantity(ComputedAreaSource, SquareMetres(reading.ComputedAreaSquareFeet))],
+            // No quantity rather than zero: the domain then reports that no
+            // source had a value, instead of pricing the wall at nothing.
+            Quantities: reading.ComputedAreaSquareFeet is double area
+                ? [new RawQuantity(ComputedAreaSource, SquareMetres(area))]
+                : [],
             Openings: [.. reading.Openings.Select(opening =>
                 new OpeningQuantity(opening.UniqueId, SquareMetres(opening.AreaSquareFeet)))]);
+    }
+
+    /// <summary>
+    /// One warning per opening that cuts the wall but could not be measured.
+    /// Such an opening is left out of <see cref="ElementTakeoff.Openings"/>, so
+    /// Revit's deduction of it stands and it is never added back; the warning
+    /// is what keeps that from being silent.
+    /// </summary>
+    public static IReadOnlyList<ValidationWarning> Warnings(ElementTakeoff takeoff, WallReading reading)
+    {
+        ArgumentNullException.ThrowIfNull(takeoff);
+        ArgumentNullException.ThrowIfNull(reading);
+
+        return [.. reading.Unmeasured.Select(opening => ValidationWarning.ForElement(
+            takeoff,
+            $"Opening {opening.UniqueId} cuts this wall but its area could not be measured ({opening.Reason}). "
+            + "Revit's deduction of it is kept, so it is never added back, even below the threshold."))];
     }
 }
