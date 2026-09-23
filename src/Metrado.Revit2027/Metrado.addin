@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>Metrado</Name>
+    <Assembly>Metrado\Metrado.Revit2027.dll</Assembly>
+    <FullClassName>Metrado.Revit2027.MetradoApplication</FullClassName>
+    <!-- Never regenerate: Revit keys the add-in's identity on this value. -->
+    <AddInId>1834CEE1-BFC3-404E-9002-5E262333E11E</AddInId>
+    <VendorId>Metrado</VendorId>
+    <VendorDescription>Partidas and metrado export to Excel</VendorDescription>
+  </AddIn>
+  <!--
+    Load into an isolated context of our own instead of Revit's shared one, so
+    every dependency resolves from this add-in's folder and never from a copy
+    another add-in happened to load first.
+  -->
+  <ManifestSettings>
+    <UseRevitContext>False</UseRevitContext>
+    <ContextName>Metrado.Revit2027</ContextName>
+  </ManifestSettings>
+</RevitAddIns>

@@ -21,6 +21,11 @@
     <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="2027.2.0" ExcludeAssets="runtime" />
   </ItemGroup>
 
+  <!-- The manifest travels with the assembly it registers. -->
+  <ItemGroup>
+    <None Include="Metrado.addin" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Metrado.Configuration\Metrado.Configuration.csproj" />
     <ProjectReference Include="..\Metrado.Domain\Metrado.Domain.csproj" />

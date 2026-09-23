@@ -33,6 +33,17 @@ public sealed class SolutionFilterTests
         "tests/Metrado.Integration.Tests/Metrado.Integration.Tests.csproj",
     ];
 
+    /// <summary>
+    /// Everything the solution carries that the filter drops. Named, not
+    /// counted: a count stays green when one Windows-only project is swapped
+    /// for another.
+    /// </summary>
+    private static readonly string[] WindowsOnlyProjects =
+    [
+        "src/Metrado.Revit2027/Metrado.Revit2027.csproj",
+        "tests/Metrado.Revit2027.Tests/Metrado.Revit2027.Tests.csproj",
+    ];
+
     [Fact]
     public void FilterResolvesToExactlyTheSevenCrossPlatformProjects()
     {
@@ -73,17 +84,17 @@ public sealed class SolutionFilterTests
     }
 
     /// <summary>
-    /// The Revit project must be present in the solution and absent from the
-    /// filter. Without this, deleting the project entirely would leave the
-    /// exclusion assertions passing for the wrong reason.
+    /// The Revit projects must be present in the solution and absent from the
+    /// filter. Without this, deleting them entirely would leave the exclusion
+    /// assertions passing for the wrong reason.
     /// </summary>
     [Fact]
-    public void SolutionStillCarriesTheWindowsOnlyProjectTheFilterDrops()
+    public void SolutionIsExactlyTheFilteredProjectsPlusTheWindowsOnlyOnes()
     {
         string[] declared = ReadSolutionProjects(RepositoryRoot());
+        string[] expected = [.. ExpectedProjects.Concat(WindowsOnlyProjects).Order(StringComparer.Ordinal)];
 
-        Assert.Contains(declared, path => path.Contains(WindowsOnlyProject, StringComparison.Ordinal));
-        Assert.Equal(ExpectedProjects.Length + 1, declared.Length);
+        Assert.Equal(expected, declared);
     }
 
     private static string[] ReadFilteredProjects(string root)
