@@ -61,7 +61,7 @@ public static class TakeoffExport
             {
                 lineas.Add(new Linea(element, chain.Resolve(element), result));
 
-                // Only a measured wall had its openings decided by the rule.
+                // Only a measured host (wall, floor, roof) had its openings decided by the rule.
                 warnings.AddRange(NearThreshold(element, criterion.Threshold));
             }
         }

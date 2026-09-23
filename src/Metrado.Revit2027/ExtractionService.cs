@@ -4,7 +4,7 @@ using Metrado.Domain;
 namespace Metrado.Revit2027;
 
 /// <summary>
-/// Extracts the model's walls, railings, doors and windows as domain takeoffs, together with the warnings
+/// Extracts the model's six categories as domain takeoffs, together with the warnings
 /// extraction itself raises. Reads only: it opens no transaction, so run from
 /// a <c>ReadOnly</c> command it cannot change the document even by mistake.
 /// </summary>
@@ -28,7 +28,8 @@ public static class ExtractionService
         List<ValidationWarning> warnings = [];
         List<string> reasons = [];
 
-        foreach (HostReading reading in WallReader.ReadAll(document, sharedParameter))
+        // Walls, floors and roofs: each opening measured or reported.
+        foreach (HostReading reading in WallReader.ReadAll(document, sharedParameter).Concat(SurfaceReader.ReadAll(document, sharedParameter)))
         {
             ElementTakeoff takeoff = HostTakeoff.From(reading, SquareMetres);
             elements.Add(takeoff);
