@@ -1,4 +1,5 @@
 using Autodesk.Revit.DB;
+using Autodesk.Revit.DB.Architecture;
 using Metrado.Revit2027;
 
 namespace Metrado.HostHarness;
@@ -6,38 +7,52 @@ namespace Metrado.HostHarness;
 /// <summary>
 /// Answers the design's first open question on a real model: does the
 /// project's Area and Volume Computations setting gate the quantity the
-/// Walls criterion reads, HOST_AREA_COMPUTED? The setting is flipped in a
-/// transaction that is rolled back, the document regenerated, and every wall
-/// Metrado reads is read under both settings. The model ends exactly as it
-/// started and is never saved — which is why this lives in the harness and
-/// never in Metrado.
+/// Walls criterion reads, HOST_AREA_COMPUTED? Both of the dialog's settings
+/// are changed in a transaction that is rolled back, the document
+/// regenerated after each: volume computation flipped, then the room area
+/// boundary moved. Each setting is read back after it is set, and the rooms
+/// are read too, as the positive control: a change the rooms show and the
+/// walls do not is the answer, while one nothing shows proves nothing. The
+/// model ends exactly as it started and is never saved — which is why this
+/// lives in the harness and never in Metrado.
 /// </summary>
 public static class AreaSettingsProbe
 {
-    /// <param name="AreasThatDiffer">Walls whose area was not the same under both settings (a value appearing or vanishing counts).</param>
-    public sealed record Result(int Walls, Reading AsFound, Reading Flipped, int AreasThatDiffer, bool ModifiedAfterProbe);
+    public sealed record Result(int Walls, int Rooms, List<Reading> Readings, bool ModifiedAfterProbe);
 
-    public sealed record Reading(bool ComputeVolumes, int AreasWithValue, int VolumesWithValue, double AreaSumSquareFeet);
+    /// <param name="State">What was set, as read back from the document.</param>
+    /// <param name="WallAreasThatDiffer">Walls whose HOST_AREA_COMPUTED is not the one read as found (a value appearing or vanishing counts).</param>
+    /// <param name="WallVolumesThatDiffer">The same for HOST_VOLUME_COMPUTED.</param>
+    public sealed record Reading(
+        string State, bool ComputeVolumes, string RoomBoundary,
+        int WallAreasWithValue, double WallAreaSumSquareFeet, int WallAreasThatDiffer, int WallVolumesThatDiffer,
+        int RoomsWithVolume, double RoomVolumeSumCubicFeet, double RoomAreaSumSquareFeet);
 
     public static Result Run(Document document)
     {
         List<Wall> walls = [.. WallReader.Walls(document)];
-        bool asFound = AreaVolumeSettings.GetAreaVolumeSettings(document).ComputeVolumes;
+        List<Room> rooms = [.. new FilteredElementCollector(document).OfCategory(BuiltInCategory.OST_Rooms).WhereElementIsNotElementType().OfType<Room>()];
+        AreaVolumeSettings asFound = AreaVolumeSettings.GetAreaVolumeSettings(document);
+        SpatialElementBoundaryLocation boundary = asFound.GetSpatialElementBoundaryLocation(SpatialElementType.Room);
 
-        Dictionary<ElementId, double?> areasAsFound = Areas(walls);
-        Reading readingAsFound = Read(asFound, walls, areasAsFound);
+        Snapshot found = Snapshot.Of(walls);
+        List<Reading> readings = [Read("as found", document, walls, rooms, found)];
 
-        Dictionary<ElementId, double?> areasFlipped;
-        Reading readingFlipped;
         using (Transaction transaction = new(document, "Metrado probe (rolled back)"))
         {
             transaction.Start();
             try
             {
-                AreaVolumeSettings.GetAreaVolumeSettings(document).ComputeVolumes = !asFound;
+                AreaVolumeSettings.GetAreaVolumeSettings(document).ComputeVolumes = !asFound.ComputeVolumes;
                 document.Regenerate();
-                areasFlipped = Areas(walls);
-                readingFlipped = Read(!asFound, walls, areasFlipped);
+                readings.Add(Read("volume computation flipped", document, walls, rooms, found));
+
+                AreaVolumeSettings.GetAreaVolumeSettings(document).ComputeVolumes = asFound.ComputeVolumes;
+                AreaVolumeSettings.GetAreaVolumeSettings(document).SetSpatialElementBoundaryLocation(
+                    boundary == SpatialElementBoundaryLocation.Center ? SpatialElementBoundaryLocation.Finish : SpatialElementBoundaryLocation.Center,
+                    SpatialElementType.Room);
+                document.Regenerate();
+                readings.Add(Read("room area boundary moved", document, walls, rooms, found));
             }
             finally
             {
@@ -45,21 +60,38 @@ public static class AreaSettingsProbe
             }
         }
 
-        int differ = walls.Count(wall => areasAsFound[wall.Id] is not { } a || areasFlipped[wall.Id] is not { } b
-            ? areasAsFound[wall.Id].HasValue != areasFlipped[wall.Id].HasValue
-            : Math.Abs(a - b) > 1e-9);
-        return new Result(walls.Count, readingAsFound, readingFlipped, differ, document.IsModified);
+        return new Result(walls.Count, rooms.Count, readings, document.IsModified);
     }
 
-    private static Dictionary<ElementId, double?> Areas(List<Wall> walls) =>
-        walls.ToDictionary(wall => wall.Id, wall => Value(wall, BuiltInParameter.HOST_AREA_COMPUTED));
+    private static Reading Read(string state, Document document, List<Wall> walls, List<Room> rooms, Snapshot found)
+    {
+        AreaVolumeSettings settings = AreaVolumeSettings.GetAreaVolumeSettings(document);
+        Snapshot now = Snapshot.Of(walls);
+        return new Reading(
+            state,
+            settings.ComputeVolumes,
+            settings.GetSpatialElementBoundaryLocation(SpatialElementType.Room).ToString(),
+            now.Areas.Count(area => area.HasValue),
+            now.Areas.Sum(area => area ?? 0),
+            Differ(found.Areas, now.Areas),
+            Differ(found.Volumes, now.Volumes),
+            rooms.Count(room => room.Volume > 0),
+            rooms.Sum(room => room.Volume),
+            rooms.Sum(room => room.Area));
+    }
 
-    private static Reading Read(bool computeVolumes, List<Wall> walls, Dictionary<ElementId, double?> areas) =>
-        new(computeVolumes,
-            areas.Values.Count(area => area.HasValue),
-            walls.Count(wall => Value(wall, BuiltInParameter.HOST_VOLUME_COMPUTED).HasValue),
-            areas.Values.Sum(area => area ?? 0));
+    private static int Differ(double?[] before, double?[] after) =>
+        before.Zip(after).Count(pair => pair.First is not { } a || pair.Second is not { } b
+            ? pair.First.HasValue != pair.Second.HasValue
+            : Math.Abs(a - b) > 1e-9);
 
     private static double? Value(Element element, BuiltInParameter id) =>
         element.get_Parameter(id) is { HasValue: true, StorageType: StorageType.Double } parameter ? parameter.AsDouble() : null;
+
+    private sealed record Snapshot(double?[] Areas, double?[] Volumes)
+    {
+        public static Snapshot Of(List<Wall> walls) =>
+            new([.. walls.Select(wall => Value(wall, BuiltInParameter.HOST_AREA_COMPUTED))],
+                [.. walls.Select(wall => Value(wall, BuiltInParameter.HOST_VOLUME_COMPUTED))]);
+    }
 }
