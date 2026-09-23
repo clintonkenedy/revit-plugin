@@ -10,9 +10,11 @@ namespace Metrado.Domain;
 /// carries the numbers rather than pointing at the file that contains them.
 /// </remarks>
 /// <param name="ExportedLines">
-/// Every measurement line in the result, unclassified ones included. The user is
-/// told "40 exported, 12 unclassified", so the total is the whole run and the
-/// unclassified figure is a part of it, not a separate pile beside it.
+/// Every measurement line in the result, unclassified ones included: the whole
+/// run, of which the unclassified figure is a part. The completion dialog never
+/// shows this total under the budget sheet's phrase: it says "N measurement lines
+/// exported to the budget sheet", N being this minus the unclassified count, the
+/// number the sheet's first row states, and names the unclassified elements apart.
 /// </param>
 /// <param name="UnclassifiedCount">
 /// How many of those lines nobody could code. This is the number that tells the

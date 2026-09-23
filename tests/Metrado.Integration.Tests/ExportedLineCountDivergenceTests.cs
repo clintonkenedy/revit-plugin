@@ -7,17 +7,18 @@ namespace Metrado.Integration.Tests;
 /// <remarks>
 /// Four walls are measured. <c>RunReport.ExportedLines</c> reports 4 — it documents
 /// itself as "every measurement line in the result, unclassified ones included",
-/// because the user is told "4 exported, 1 unclassified" and the unclassified
-/// figure is a part of the total rather than a separate pile beside it. The budget
+/// the whole run, of which the unclassified figure is a part. The budget
 /// sheet states 3 — it counts the measurement rows it actually carries, so the
 /// stated figure reconciles with the rows beneath it exactly as the subtotals do,
 /// and the uncoded wall is counted on its own sheet.
 /// <para>
 /// <b>Neither is wrong and this is not a bug report.</b> They answer different
-/// questions and each is correct against the block it heads. What is wrong is that
-/// they share a name, and task 1.24's completion dialog shows the run report beside
-/// a workbook the user then opens. Until that wording is reconciled, an estimator
-/// reads "4 exported" in the dialog and finds "3" in the file.
+/// questions and each is correct against the block it heads. What was wrong is that
+/// they shared a name while task 1.24's completion dialog shows the run report
+/// beside a workbook the user then opens. The dialog settles it (PR 17): it reads
+/// "3 measurement lines exported to the budget sheet; 1 element listed as
+/// unclassified", the sheet's number under the sheet's phrase, and never shows
+/// ExportedLines under that phrase.
 /// </para>
 /// <para>
 /// This was recorded as an open risk when the writer's summary row was added, on

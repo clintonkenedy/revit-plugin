@@ -97,11 +97,11 @@ public sealed class TakeoffExportTests
     /// warning now gives the value in full and says which way the rule went.
     /// </summary>
     [Theory]
-    [InlineData(BoundaryMode.Exclusive, 0.99997, "0.99997", "added it back")]
-    [InlineData(BoundaryMode.Exclusive, 1.0, "measures 1 m2", "kept it deducted")]
-    [InlineData(BoundaryMode.Inclusive, 1.00004, "1.00004", "kept it deducted")]
-    [InlineData(BoundaryMode.Inclusive, 1.0, "measures 1 m2", "added it back")]
-    public void TheBandWarningStatesTheValueAndTheRulesDecision(BoundaryMode mode, double opening, string value, string decision)
+    [InlineData(BoundaryMode.Exclusive, 0.99997, "0.99997", "added it back", "threshold (exclusive)")]
+    [InlineData(BoundaryMode.Exclusive, 1.0, "measures 1 m2", "kept it deducted", "threshold (exclusive)")]
+    [InlineData(BoundaryMode.Inclusive, 1.00004, "1.00004", "kept it deducted", "threshold (inclusive)")]
+    [InlineData(BoundaryMode.Inclusive, 1.0, "measures 1 m2", "added it back", "threshold (inclusive)")]
+    public void TheBandWarningStatesTheValueAndTheRulesDecision(BoundaryMode mode, double opening, string value, string decision, string convention)
     {
         EffectiveCriteria criteria = new(
             CriteriaSet.Merge(CriteriaSet.Default, [new CategoryOverride("Walls", mode: mode)]).Value,
@@ -113,6 +113,7 @@ public sealed class TakeoffExportTests
         ValidationWarning band = Assert.Single(outcome.Report.Warnings, warning => warning.Condition.Contains("window"));
         Assert.Contains(value, band.Condition);
         Assert.Contains(decision, band.Condition);
+        Assert.Contains(convention, band.Condition);
     }
 
     /// <summary>A wall the rule never measured decided nothing about its openings.</summary>
