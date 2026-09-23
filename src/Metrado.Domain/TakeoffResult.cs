@@ -16,8 +16,8 @@ public sealed record TakeoffResult(IReadOnlyList<Partida> Partidas)
     public int LineCount => Partidas.Sum(partida => partida.Lineas.Count);
 
     /// <summary>
-    /// Groups measured lines into partidas, keyed by capitulo plus resolved code
-    /// and by nothing else.
+    /// Groups measured lines into partidas, keyed by capitulo plus resolved code,
+    /// and apart by unit when one key's lines disagree on it.
     /// </summary>
     /// <remarks>
     /// Element type identity is deliberately not part of the key: two distinct
@@ -32,21 +32,46 @@ public sealed record TakeoffResult(IReadOnlyList<Partida> Partidas)
     /// </remarks>
     public static TakeoffResult Group(IReadOnlyList<Linea> lineas)
     {
-        Dictionary<PartidaKey, List<Linea>> byKey = [];
-        List<PartidaKey> encountered = [];
+        Dictionary<(PartidaKey Key, QuantityUnit Unit), List<Linea>> byKeyAndUnit = [];
+        Dictionary<PartidaKey, QuantityUnit> firstUnit = [];
+        List<(PartidaKey Key, QuantityUnit Unit)> encountered = [];
+        List<ValidationWarning> warnings = [];
 
         foreach (Linea linea in Guard.RequiredValue(lineas, nameof(lineas)))
         {
-            if (!byKey.TryGetValue(linea.Key, out List<Linea>? group))
+            QuantityUnit unit = linea.Metrado.Metrado.Unit;
+            if (!byKeyAndUnit.TryGetValue((linea.Key, unit), out List<Linea>? group))
             {
                 group = [];
-                byKey.Add(linea.Key, group);
-                encountered.Add(linea.Key);
+                byKeyAndUnit.Add((linea.Key, unit), group);
+                encountered.Add((linea.Key, unit));
+
+                if (!firstUnit.ContainsKey(linea.Key))
+                {
+                    firstUnit.Add(linea.Key, unit);
+                }
+                else
+                {
+                    warnings.Add(ValidationWarning.ForElement(
+                        linea.Element,
+                        $"Partida {linea.Key.PartidaCode} in {linea.Key.Capitulo} has lines in {firstUnit[linea.Key].Symbol()} and in {unit.Symbol()}. "
+                            + "They are listed apart and not added together: no unit is converted into another."));
+                }
             }
 
             group.Add(linea);
         }
 
-        return new TakeoffResult([.. encountered.Select(key => new Partida(key, byKey[key]))]);
+        return new TakeoffResult([.. encountered.Select(entry => new Partida(entry.Key, byKeyAndUnit[entry]))])
+        {
+            Warnings = warnings,
+        };
     }
+
+    /// <summary>
+    /// Partidas whose lines came in more than one unit (<c>excel-budget-export</c>,
+    /// "Unit Reported per Partida"): each unit's lines are a partida of their own,
+    /// never summed with the others, and each such split is reported here.
+    /// </summary>
+    public IReadOnlyList<ValidationWarning> Warnings { get; init; } = [];
 }

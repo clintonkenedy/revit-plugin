@@ -55,7 +55,10 @@ public sealed record RunReport(
     /// </remarks>
     public int WarningCount => Warnings.Count;
 
-    /// <summary>Builds the report for a finished run.</summary>
+    /// <summary>
+    /// Builds the report for a finished run: the run's warnings, then any
+    /// grouping raised (a partida split by unit), so no caller can drop them.
+    /// </summary>
     public static RunReport For(TakeoffResult result, IReadOnlyList<ValidationWarning> warnings)
     {
         IReadOnlyList<Partida> partidas = Guard.RequiredValue(result, nameof(result)).Partidas;
@@ -66,7 +69,7 @@ public sealed record RunReport(
                 .Where(partida => partida.IsUnclassified)
                 .Sum(partida => partida.Lineas.Count),
             Applied: AppliedConventions(partidas),
-            Warnings: Guard.RequiredValue(warnings, nameof(warnings)));
+            Warnings: [.. Guard.RequiredValue(warnings, nameof(warnings)), .. result.Warnings]);
     }
 
     /// <summary>
@@ -80,24 +83,30 @@ public sealed record RunReport(
     /// different values on exactly the runs worth reporting — so sourcing the
     /// report from the configuration would make it agree with itself while
     /// disagreeing with the budget printed next to it.
+    /// <para>
+    /// One entry per capitulo and unit: a partida whose lines came in two units
+    /// is split by grouping, which reports it, and each unit's lines carry their
+    /// own convention.
+    /// </para>
     /// </remarks>
     /// <exception cref="InvalidOperationException">
-    /// One capitulo's lines were measured under more than one convention, so there
-    /// is no single effective configuration to report for it.
+    /// One capitulo's lines in one unit were measured under more than one
+    /// threshold or mode, so there is no single effective configuration to
+    /// report for them.
     /// </exception>
     private static IReadOnlyList<AppliedCriterion> AppliedConventions(
         IReadOnlyList<Partida> partidas)
     {
-        Dictionary<string, AppliedCriterion> byCapitulo = new(StringComparer.Ordinal);
-        List<string> encountered = [];
+        Dictionary<(string Capitulo, QuantityUnit Unit), AppliedCriterion> byCapitulo = [];
+        List<(string Capitulo, QuantityUnit Unit)> encountered = [];
 
         foreach (Linea linea in partidas.SelectMany(partida => partida.Lineas))
         {
-            string capitulo = linea.Element.CategoryName;
+            (string Capitulo, QuantityUnit Unit) capitulo = (linea.Element.CategoryName, linea.Metrado.Metrado.Unit);
 
             AppliedCriterion applied = new(
-                capitulo,
-                linea.Metrado.Metrado.Unit,
+                capitulo.Capitulo,
+                capitulo.Unit,
                 linea.Metrado.AppliedThreshold,
                 linea.Metrado.AppliedMode);
 
@@ -106,7 +115,7 @@ public sealed record RunReport(
                 if (already != applied)
                 {
                     throw new InvalidOperationException(
-                        $"Capitulo {capitulo} was measured under more than one convention "
+                        $"Capitulo {capitulo.Capitulo} was measured under more than one convention "
                             + $"({already} and {applied}), so the run has no single effective "
                             + "configuration to report for it.");
                 }
