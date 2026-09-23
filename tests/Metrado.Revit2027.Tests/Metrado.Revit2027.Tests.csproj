@@ -50,6 +50,16 @@
     <None Include="$(PkgNice3point_Revit_Api_RevitAPIUI)\ref\net10.0-windows7.0\RevitAPIUI.dll" Link="RevitApi\RevitAPIUI.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
   </ItemGroup>
 
+  <!--
+    The add-in's own dependency manifest, which only its build writes. This
+    suite's deps.json is not a substitute: the desktop runtime referenced above
+    supplies System.IO.Packaging and drops it from this suite's graph, while
+    the add-in, deployed on its own, has to carry it.
+  -->
+  <ItemGroup>
+    <None Include="..\..\src\Metrado.Revit2027\bin\$(Configuration)\net10.0-windows\Metrado.Revit2027.deps.json" Link="AddIn\Metrado.Revit2027.deps.json" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+
   <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
