@@ -18,7 +18,9 @@ namespace Metrado.Domain;
 /// <c>metrado-measurement</c> as <c>rawQuantity + Σ q(o)</c> over <em>every</em>
 /// opening. It is the ceiling on the correction: adding openings back can reach
 /// it but never pass it, because there is no more material to restore than Revit
-/// removed.
+/// removed. A layer line's openings count by its share of each (task 3.2), so a
+/// line that keeps Revit's deduction (a line in m3, or under a condition) has
+/// its raw quantity as its gross: no undeducted figure is invented for it.
 /// </param>
 /// <param name="AppliedMode">
 /// The boundary convention actually applied. Recorded rather than assumed: the
@@ -26,9 +28,9 @@ namespace Metrado.Domain;
 /// two defensible budgets indistinguishable.
 /// </param>
 /// <param name="AppliedThreshold">
-/// The threshold value actually applied, in <paramref name="Raw"/>'s unit. The
-/// other half of the convention — the same mode at a different threshold is a
-/// different budget.
+/// The threshold value actually applied, in <see cref="AppliedThresholdUnit"/>.
+/// The other half of the convention — the same mode at a different threshold is
+/// a different budget.
 /// </param>
 /// <param name="ClampedToGross">
 /// Whether the gross bound had to be enforced on this element. True means the

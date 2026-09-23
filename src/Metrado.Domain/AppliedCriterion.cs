@@ -16,9 +16,9 @@ namespace Metrado.Domain;
 /// </para>
 /// </remarks>
 /// <param name="Threshold">
-/// The threshold value applied, expressed in <paramref name="Unit"/>. Reported
-/// beside the mode because the same mode at a different threshold is a different
-/// budget.
+/// The threshold value applied, expressed in <see cref="ThresholdUnit"/>.
+/// Reported beside the mode because the same mode at a different threshold is a
+/// different budget.
 /// </param>
 public sealed record AppliedCriterion(
     string Capitulo,

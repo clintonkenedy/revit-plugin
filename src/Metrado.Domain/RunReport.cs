@@ -23,7 +23,8 @@ namespace Metrado.Domain;
 /// <param name="Applied">
 /// The convention each capitulo was actually measured under, one entry per
 /// capitulo and unit that produced at least one line (a capitulo has one
-/// unit unless grouping split a partida by unit).
+/// unit unless grouping split a partida by unit, or its layer lines are in
+/// m2 and m3).
 /// </param>
 public sealed record RunReport(
     int ExportedLines,
@@ -101,7 +102,8 @@ public sealed record RunReport(
     /// <para>
     /// One entry per capitulo and unit: a partida whose lines came in two units
     /// is split by grouping, which reports it, and each unit's lines carry their
-    /// own convention.
+    /// own convention. Layer lines in m2 and m3 give a capitulo two entries with
+    /// no split, each in its own partida.
     /// </para>
     /// </remarks>
     /// <exception cref="InvalidOperationException">
