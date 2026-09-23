@@ -29,6 +29,9 @@ internal static class GoldenFixtures
     /// <summary>Walls in m2, counted doors in u, railings in m, and one partida whose lines came in two units (task 2.5).</summary>
     internal const string MixedUnitsName = "mixed-units.xlsx";
 
+    /// <summary>Layered walls, one line per material (task 3.5), with a material merged over two layers and one left uncoded.</summary>
+    internal const string MaterialLayersName = "material-layers.xlsx";
+
     /// <summary>Every stored reference workbook, by file name.</summary>
     internal static IReadOnlyDictionary<string, TakeoffResult> All =>
         new Dictionary<string, TakeoffResult>(StringComparer.Ordinal)
@@ -37,6 +40,7 @@ internal static class GoldenFixtures
             [ZeroUnclassifiedName] = ZeroUnclassified(),
             [EmptyResultName] = EmptyResult(),
             [MixedUnitsName] = MixedUnits(),
+            [MaterialLayersName] = MaterialLayers(),
         };
 
     /// <summary>

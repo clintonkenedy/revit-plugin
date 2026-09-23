@@ -69,6 +69,13 @@ public sealed class GoldenFixtureTests
             GoldenFixtures.MixedUnitsName,
             GoldenFixtures.MixedUnits());
 
+    /// <summary>"Layered wall produces one line per layer" (task 3.5), frozen: materials, layers and order.</summary>
+    [Fact]
+    public void TheWriterStillReproducesTheMaterialLayersReference() =>
+        GoldenWorkbook.AssertReproduces(
+            GoldenFixtures.MaterialLayersName,
+            GoldenFixtures.MaterialLayers());
+
     [Fact]
     public void TheStoredReferenceForAnEmptyRunCarriesHeadersAndStatesZero()
     {
