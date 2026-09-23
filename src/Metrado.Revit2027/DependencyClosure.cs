@@ -1,11 +1,13 @@
 namespace Metrado.Revit2027;
 
 /// <summary>
-/// The third-party assemblies the add-in must find in its own folder.
+/// The assemblies the add-in must find in its own folder: Metrado's own and
+/// the eight third-party ones the workbook writer pulls in.
 ///
 /// With <c>UseRevitContext</c> off, nothing Revit or another add-in loaded can
-/// stand in for one of these, so a deployment missing any of them fails on
-/// the first click that reaches the workbook writer — far from its cause.
+/// stand in for one of these, and none is needed to start: a deployment
+/// missing any of them loads cleanly and fails on the first click that
+/// reaches Domain or the workbook writer — far from its cause.
 /// <see cref="Verify"/> runs at startup instead and names what is missing.
 ///
 /// Names are assembly file names, not package names: the <c>RBush.Signed</c>
@@ -15,6 +17,9 @@ public static class DependencyClosure
 {
     public static IReadOnlyList<string> RequiredAssemblies { get; } =
     [
+        "Metrado.Configuration",
+        "Metrado.Domain",
+        "Metrado.Excel",
         "ClosedXML",
         "ClosedXML.Parser",
         "DocumentFormat.OpenXml",
@@ -35,8 +40,10 @@ public static class DependencyClosure
 
         if (missing.Count > 0)
         {
+            string count = missing.Count == 1 ? "1 required assembly is" : $"{missing.Count} required assemblies are";
+
             throw new InvalidOperationException(
-                $"Metrado cannot start: {missing.Count} required assemblies are missing from '{folder}': "
+                $"Metrado cannot start: {count} missing from '{folder}': "
                 + string.Join(", ", missing.Select(name => name + ".dll"))
                 + ". Redeploy the add-in from a complete 'dotnet publish' output.");
         }

@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace Metrado.Revit2027.Tests;
 
 /// <summary>
-/// Pins the startup check that the add-in's third-party closure was deployed.
+/// Pins the startup check that the add-in's dependency closure was deployed.
 ///
 /// In an isolated load context nothing another add-in loaded can stand in for
 /// a missing assembly, so an incomplete deployment fails on the first click
@@ -12,6 +12,8 @@ namespace Metrado.Revit2027.Tests;
 /// </summary>
 public sealed class DependencyClosureTests : IDisposable
 {
+    private const string AddInLibrary = "Metrado.Revit2027";
+
     private readonly DirectoryInfo _folder = Directory.CreateTempSubdirectory("metrado-closure-");
 
     public void Dispose() => _folder.Delete(recursive: true);
@@ -21,11 +23,15 @@ public sealed class DependencyClosureTests : IDisposable
     /// the design's list: that list named <c>RBush.Signed</c>, which is the
     /// package, while the assembly it ships is <c>RBush.dll</c>. Checking the
     /// package name would have failed every startup of a correct deployment.
+    ///
+    /// Metrado's own assemblies count too. The add-in loads without them and
+    /// fails on the first click that reaches Domain or Excel — the deferred
+    /// failure this check exists to move to startup.
     /// </summary>
     [Fact]
-    public void TheRequiredAssembliesAreExactlyTheAddInsThirdPartyRuntimeClosure()
+    public void TheRequiredAssembliesAreExactlyTheAddInsRuntimeClosure()
     {
-        Assert.Equal(ThirdPartyClosureFromDepsFile(), DependencyClosure.RequiredAssemblies.Order(StringComparer.Ordinal));
+        Assert.Equal(RuntimeClosureFromDepsFile(), DependencyClosure.RequiredAssemblies.Order(StringComparer.Ordinal));
     }
 
     [Fact]
@@ -62,9 +68,22 @@ public sealed class DependencyClosureTests : IDisposable
             () => DependencyClosure.Verify(_folder.FullName));
 
         Assert.Contains(_folder.FullName, failure.Message);
+        Assert.Contains("2 required assemblies are missing", failure.Message);
         Assert.Contains("ClosedXML.dll", failure.Message);
         Assert.Contains("RBush.dll", failure.Message);
         Assert.DoesNotContain("SixLabors.Fonts.dll", failure.Message);
+    }
+
+    [Fact]
+    public void ASingleMissingAssemblyIsReportedInTheSingular()
+    {
+        Deploy(DependencyClosure.RequiredAssemblies.Where(name => name != "Metrado.Excel"));
+
+        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(
+            () => DependencyClosure.Verify(_folder.FullName));
+
+        Assert.Contains("1 required assembly is missing", failure.Message);
+        Assert.Contains("Metrado.Excel.dll", failure.Message);
     }
 
     /// <summary>
@@ -91,25 +110,23 @@ public sealed class DependencyClosureTests : IDisposable
 
     /// <summary>
     /// Walks <c>Metrado.Revit2027.deps.json</c> from the add-in's own entry and
-    /// collects the runtime assemblies of every package it reaches. Project
-    /// references are Metrado's own; the Revit API contributes none, since it
-    /// is referenced for compilation only.
+    /// collects the runtime assemblies of every library it reaches — packages
+    /// and Metrado's own projects alike — except the add-in itself, which is
+    /// running by the time the check does. The Revit API contributes none,
+    /// since it is referenced for compilation only.
     /// </summary>
-    private static string[] ThirdPartyClosureFromDepsFile()
+    private static string[] RuntimeClosureFromDepsFile()
     {
         using JsonDocument deps = JsonDocument.Parse(
             File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "AddIn", "Metrado.Revit2027.deps.json")));
         JsonElement target = deps.RootElement.GetProperty("targets").EnumerateObject().Single().Value;
-        JsonElement libraries = deps.RootElement.GetProperty("libraries");
 
         Dictionary<string, JsonElement> byName = target.EnumerateObject()
             .ToDictionary(library => library.Name.Split('/')[0], library => library.Value);
-        Dictionary<string, string> kinds = libraries.EnumerateObject()
-            .ToDictionary(library => library.Name.Split('/')[0], library => library.Value.GetProperty("type").GetString()!);
 
         HashSet<string> assemblies = [];
         HashSet<string> visited = [];
-        Stack<string> pending = new(["Metrado.Revit2027"]);
+        Stack<string> pending = new([AddInLibrary]);
 
         while (pending.TryPop(out string? name))
         {
@@ -120,7 +137,7 @@ public sealed class DependencyClosureTests : IDisposable
 
             JsonElement library = byName[name];
 
-            if (kinds[name] == "package" && library.TryGetProperty("runtime", out JsonElement runtime))
+            if (name != AddInLibrary && library.TryGetProperty("runtime", out JsonElement runtime))
             {
                 assemblies.UnionWith(runtime.EnumerateObject().Select(asset => Path.GetFileNameWithoutExtension(asset.Name)));
             }
