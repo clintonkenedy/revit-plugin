@@ -8,10 +8,11 @@ namespace Metrado.Revit2027;
 /// project they price.
 ///
 /// It answers in three states, never two. A file that is there but cannot be
-/// read — held open, refused by permissions, a folder under the file's name —
-/// is <see cref="CriteriaFileLookup.Unreadable"/>, naming the file, and stops
-/// the run; only nothing-there is <see cref="CriteriaFileLookup.Absent"/>, which
-/// falls back to the defaults (residual finding N3). Uses no Revit type.
+/// read — held open, refused by permissions, a folder under the file's name,
+/// a folder that cannot be reached — is <see cref="CriteriaFileLookup.Unreadable"/>,
+/// naming the file, and stops the run; only nothing-there is
+/// <see cref="CriteriaFileLookup.Absent"/>, which falls back to the defaults
+/// (residual finding N3). Uses no Revit type.
 /// </summary>
 public static class CriteriaFileLocator
 {
@@ -38,14 +39,15 @@ public static class CriteriaFileLocator
             return (Unreadable(path, "it is a folder, not a file"), path);
         }
 
-        if (!File.Exists(path))
-        {
-            return (CriteriaFileLookup.Absent, path);
-        }
-
+        // Read, never probe first: a probe answers "no file" for a folder it
+        // cannot reach, and only a file that is truly not there is absent.
         try
         {
             return (CriteriaFileLookup.Found(File.ReadAllText(path)), path);
+        }
+        catch (FileNotFoundException)
+        {
+            return (CriteriaFileLookup.Absent, path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

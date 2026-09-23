@@ -1,3 +1,4 @@
+using System.Security.AccessControl;
 using Metrado.Domain;
 
 namespace Metrado.Revit2027.Tests;
@@ -68,9 +69,10 @@ public sealed class CriteriaFileLocatorTests : IDisposable
     {
         File.WriteAllText(CriteriaPath, text);
 
-        (CriteriaFileLookup lookup, _) = CriteriaFileLocator.Locate(ModelPath);
+        (CriteriaFileLookup lookup, string? probed) = CriteriaFileLocator.Locate(ModelPath);
 
         Assert.Equal("found:" + text, State(lookup));
+        Assert.Equal(CriteriaPath, probed);
     }
 
     /// <summary>
@@ -87,7 +89,39 @@ public sealed class CriteriaFileLocatorTests : IDisposable
 
         ConfigError error = Unreadable(lookup);
         Assert.Equal(CriteriaPath, error.FilePath);
-        Assert.Contains(CriteriaPath, error.Message);
+        Assert.StartsWith($"The criteria file '{CriteriaPath}' could not be read: ", error.Message);
+    }
+
+    [Fact]
+    public void AFileThePermissionsRefuseIsUnreadable()
+    {
+        File.WriteAllText(CriteriaPath, "{}");
+
+        CriteriaFileLookup lookup;
+        using (Acl.Deny(CriteriaPath, FileSystemRights.ReadData))
+        {
+            (lookup, _) = CriteriaFileLocator.Locate(ModelPath);
+        }
+
+        ConfigError error = Unreadable(lookup);
+        Assert.Equal(CriteriaPath, error.FilePath);
+        Assert.StartsWith($"The criteria file '{CriteriaPath}' could not be read: ", error.Message);
+    }
+
+    /// <summary>
+    /// A share that dropped looks, to a probe for the file, like no file at
+    /// all. The model's own folder is never really missing, so a folder that
+    /// cannot be reached stops the run instead of pricing under the defaults.
+    /// </summary>
+    [Fact]
+    public void AFolderThatCannotBeReachedIsUnreadableNotAbsent()
+    {
+        string unreachable = Path.Combine(_project.FullName, "offline share", "Office Building.rvt");
+
+        (CriteriaFileLookup lookup, _) = CriteriaFileLocator.Locate(unreachable);
+
+        ConfigError error = Unreadable(lookup);
+        Assert.Equal(Path.Combine(_project.FullName, "offline share", CriteriaFileLocator.FileName), error.FilePath);
     }
 
     /// <summary>A folder with the file's name is something there, not nothing: it is never "absent".</summary>
