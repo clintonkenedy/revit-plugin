@@ -201,6 +201,23 @@ public static class Measurement
                 UnitsDisagree(element, foreign, threshold));
         }
 
+        return Correct(element, raw, openings, threshold, factor: 1);
+    }
+
+    /// <summary>
+    /// The correction's arithmetic, once units are known to agree: every
+    /// opening decided against the threshold on its own, and what it adds
+    /// back, and to the gross, scaled by <paramref name="factor"/>. A whole
+    /// element's factor is 1; a material layer's is its share of each opening
+    /// (task 3.2), or 0 when that share cannot be trusted.
+    /// </summary>
+    internal static MetradoOutcome Correct(
+        ElementTakeoff element,
+        Quantity raw,
+        IReadOnlyList<Quantity> openings,
+        OpeningsThreshold threshold,
+        double factor)
+    {
         double addedBack = 0;
         double allOpenings = 0;
 
@@ -217,6 +234,8 @@ public static class Measurement
             }
         }
 
+        addedBack *= factor;
+        allOpenings *= factor;
         double corrected = raw.Value + addedBack;
         double gross = raw.Value + allOpenings;
 
