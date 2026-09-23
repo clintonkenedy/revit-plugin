@@ -40,6 +40,20 @@ Absence is never an error; a supplied file is never ignored:
 
 `Merge` is per-category then per-field coalesce: a category absent from the file keeps its default entirely; a present category inherits every field left `null` — threshold, mode, unit and sources alike. Unknown category names are rejected before merging, so a typo fails loudly instead of being ignored.
 
+## Opening Measurement (decided in PR 16, on host evidence)
+
+**The constraint.** The rule compares each opening's own quantity, so the adapter must say how much area Revit subtracted for each insert. No read-only Revit API returns that (Autodesk KB, Dec 2025: "Currently it is not possible to extract the opening areas of a calculated area from walls in Revit"). The exact method — delete the insert, regenerate, read, roll back — needs a transaction, which `TransactionMode.ReadOnly` forbids. Every measured opening is therefore an **outline standing in for the deduction**.
+
+**The decision.** A family instance's outline comes from `ExporterIFCUtils.GetInstanceCutoutFromWall` and its area from `ComputeAreaOfCurveLoops` (compile-only reference `Nice3point.Revit.Api.RevitAPIIFC` 2027.2.0); a rectangular `Opening` uses `BoundaryRect`. `OpeningPolicy` — pure, unit-tested — decides whether each outline may stand for the deduction. When it may not, the opening becomes a `ValidationWarning` naming it and the reason, **and its deduction stands**: it is never added back. The error can only understate a metrado; it never adds back material Revit did not remove.
+
+An insert is **not an opening of the wall** unless it generates the wall's faces (`GetGeneratingElementIds`); hosts list inserts shared through joins that cut nothing. `Opening` elements count as cuts regardless, since one removed 11.4 m2 without being named by any face. An opening is **reported, not measured**, when it is a void cut, an embedded wall, of an unknown kind, hosted by another wall (a shadow cut through a join), without a computable outline or area, reaching beyond the wall solid, overlapping any other cut in the wall (Revit deducts the union once), or in a wall with a condition that breaks outlines: not straight, sweeps or reveals in the type or across it, or an edited profile. An attached top or base is deliberately not such a condition (see evidence).
+
+Converted quantities are rounded to 1e-9 m2 at the seam, so the feet round trip's noise (1.0 m2 arriving as 0.9999999999999999) cannot flip the exact-threshold case.
+
+**Evidence** (`tools/Metrado.HostHarness`, mode `probe-walls`: each insert deleted, regenerated, read and rolled back; the model never saved). On 120 walls of the Snowdon Towers and Pacific Continental samples, Metrado's own `WallReader` measured **206 openings matching Revit's deduction to 1e-6 m2**, overstated **none** beyond 2.2e-6 m2 (geometric noise), understated **17** by at most 0.033 m2 (windows in walls with four to seven joins; the safe direction), reported **127** with a reason, and left **no** deducting insert both unmeasured and unreported. Treating an attached top or base as a condition had reported 72 openings on the Pacific sample; 68 of those 71 outlines were exact, and the one overstatement (+4.88 m2) reached 2.13 m beyond the wall, which containment reports — so it is not a condition.
+
+**Limits that stay open.** Holes drawn with Edit Profile and reveals with no insert element are never detected as openings: they stay deducted, silently, unless an insert in the same wall triggers the edited-profile or sweep condition. Walls joined many times can understate an opening by a few hundredths of a square metre. All phases are read, so a demolished wall and the infill Revit creates for a demolished insert are both measured — a product decision still owed. Stacked-wall parents and curtain walls are outside I1; their members and basic walls are read. The probe is the regression instrument: re-run it after every Revit update.
+
 ## Data Flow
 
     Revit Document
