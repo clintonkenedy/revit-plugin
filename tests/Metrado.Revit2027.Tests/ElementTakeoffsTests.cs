@@ -3,10 +3,11 @@ using Metrado.Domain;
 namespace Metrado.Revit2027.Tests;
 
 /// <summary>
-/// Pins how an element other than a wall becomes the domain's takeoff (task
-/// 2.6): railings carry their length in metres, doors and windows carry no
-/// quantity at all (they are counted), and every element carries the codes
-/// its type holds, keyed by the category the criteria know it by.
+/// Pins how an element other than a wall, as read, becomes the domain's
+/// takeoff (task 2.6): a railing's length arrives in metres, a door or
+/// window read with no quantity stays without one (they are counted), and
+/// the codes and the category key pass through. What the reader itself
+/// reads from Revit is proved on the host, not here.
 /// </summary>
 public sealed class ElementTakeoffsTests
 {
@@ -22,6 +23,48 @@ public sealed class ElementTakeoffsTests
         RawQuantity length = Assert.Single(takeoff.Quantities);
         Assert.Equal("CURVE_ELEM_LENGTH", length.SourceKey);
         Assert.Equal(new Quantity(3.048, QuantityUnit.Metre), length.Amount);
+    }
+
+    /// <summary>Every name the reading carries passes through as read, and a length is rounded to the nanometre only.</summary>
+    [Fact]
+    public void IdentityNamesAndRoundingPassThrough()
+    {
+        ElementReading railing = new("r-1", "Railings", "Railing", "900mm Pipe", "t-1", Codes, [new QuantityReading("CURVE_ELEM_LENGTH", QuantityKind.Length, 10.123456789012)]);
+
+        ElementTakeoff takeoff = ElementTakeoffs.From(railing, feet => feet * 0.3048);
+
+        Assert.Equal(("r-1", "Railings", "Railing", "900mm Pipe"), (takeoff.UniqueId, takeoff.CategoryName, takeoff.FamilyName, takeoff.TypeName));
+        Assert.Equal(Math.Round(10.123456789012 * 0.3048, 9), Assert.Single(takeoff.Quantities).Amount.Value);
+        Assert.NotEqual(10.123456789012 * 0.3048, Assert.Single(takeoff.Quantities).Amount.Value);
+    }
+
+    /// <summary>
+    /// A multistory stair repeats its railing on every storey as subelements
+    /// no collector returns, and Revit gives one storey's length. The number
+    /// stays Revit's, but never silently.
+    /// </summary>
+    [Fact]
+    public void ARailingRepeatedOnSeveralStoreysIsWarnedAbout()
+    {
+        string condition = Assert.IsType<string>(ElementTakeoffs.RepeatedOn(8));
+        ElementReading railing = new("r-1", "Railings", "Railing", "900mm Pipe", "t-1", Codes, [], Conditions: [condition]);
+
+        ValidationWarning warning = Assert.Single(ElementTakeoffs.Warnings(ElementTakeoffs.From(railing, feet => feet), railing));
+
+        Assert.Equal(("r-1", "Railings"), (warning.UniqueId, warning.CategoryName));
+        Assert.Contains("8 storeys", warning.Condition, StringComparison.Ordinal);
+        Assert.Contains("other 7", warning.Condition, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(0)]
+    public void ARailingOnOneStoreyHasNothingToWarnAbout(int storeys)
+    {
+        ElementReading railing = new("r-1", "Railings", "Railing", "900mm Pipe", "t-1", Codes, []);
+
+        Assert.Null(ElementTakeoffs.RepeatedOn(storeys));
+        Assert.Empty(ElementTakeoffs.Warnings(ElementTakeoffs.From(railing, feet => feet), railing));
     }
 
     /// <summary>A door has no quantity to read: it is counted, one per instance, by its criterion.</summary>

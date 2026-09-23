@@ -2,7 +2,7 @@ using Metrado.Domain;
 
 namespace Metrado.Revit2027;
 
-/// <summary>What a quantity measures, which decides its unit once converted.</summary>
+/// <summary>What a quantity measures. Only lengths are read so far, converted from feet to metres.</summary>
 public enum QuantityKind
 {
     /// <summary>A length, read in feet and converted to metres.</summary>
@@ -26,6 +26,7 @@ public sealed record CodesReading(string? AssemblyCode, string? Keynote, IReadOn
 /// <see cref="ElementTakeoff"/> can be proved without Revit running.
 /// </summary>
 /// <param name="CategoryKey">The key the criteria know the category by, never Revit's localized name.</param>
+/// <param name="Conditions">What the estimator must know about the quantity read, one warning each.</param>
 public sealed record ElementReading(
     string UniqueId,
     string CategoryKey,
@@ -33,7 +34,8 @@ public sealed record ElementReading(
     string TypeName,
     string TypeUniqueId,
     CodesReading Codes,
-    IReadOnlyList<QuantityReading> Quantities);
+    IReadOnlyList<QuantityReading> Quantities,
+    IReadOnlyList<string>? Conditions = null);
 
 /// <summary>Turns an <see cref="ElementReading"/> into the domain's <see cref="ElementTakeoff"/>.</summary>
 public static class ElementTakeoffs
@@ -57,5 +59,25 @@ public static class ElementTakeoffs
                 .Where(quantity => double.IsFinite(quantity.InternalValue))
                 .Select(quantity => new RawQuantity(quantity.SourceKey, new Quantity(Math.Round(feetToMetres(quantity.InternalValue), 9), QuantityUnit.Metre)))],
             Openings: []);
+    }
+
+    /// <summary>
+    /// A railing's condition when a multistory stair repeats it: the copies
+    /// are subelements no collector returns, and Revit gives the length of
+    /// one storey. Null on a single storey.
+    /// </summary>
+    public static string? RepeatedOn(int storeys) =>
+        storeys > 1
+            ? $"A multistory stair repeats this railing on {storeys} storeys, and Revit gives the length of one, "
+                + $"which is what the budget carries: add the other {storeys - 1} by hand."
+            : null;
+
+    /// <summary>One warning per condition the reading carries, naming the element.</summary>
+    public static IReadOnlyList<ValidationWarning> Warnings(ElementTakeoff takeoff, ElementReading reading)
+    {
+        ArgumentNullException.ThrowIfNull(takeoff);
+        ArgumentNullException.ThrowIfNull(reading);
+
+        return [.. (reading.Conditions ?? []).Select(condition => ValidationWarning.ForElement(takeoff, condition))];
     }
 }

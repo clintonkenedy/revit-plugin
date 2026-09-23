@@ -4,7 +4,7 @@ using Autodesk.Revit.DB.Architecture;
 namespace Metrado.Revit2027;
 
 /// <summary>
-/// Reads the categories other than walls and floors (task 2.6): railings with
+/// Reads railings, doors and windows (task 2.6): railings with
 /// their length, doors and windows with no quantity (they are counted), each
 /// with the codes its type holds. Parameters are read by built-in identifier
 /// or, for the nominated shared parameter, by GUID; never by the name the UI
@@ -19,7 +19,8 @@ public static class OtherElementReader
     public static IReadOnlyList<ElementReading> ReadAll(Document document, Guid? sharedParameter) =>
     [
         .. InForce(new FilteredElementCollector(document).OfClass(typeof(Railing)))
-            .Select(railing => Read(document, railing, RailingsKey, [Length(railing)], sharedParameter)),
+            .OfType<Railing>()
+            .Select(railing => Read(document, railing, RailingsKey, [Length(railing)], sharedParameter, ElementTakeoffs.RepeatedOn(Storeys(document, railing)))),
         .. InForce(new FilteredElementCollector(document).OfCategory(BuiltInCategory.OST_Doors).WhereElementIsNotElementType().OfType<FamilyInstance>())
             .Select(door => Read(document, door, DoorsKey, [], sharedParameter)),
         .. InForce(new FilteredElementCollector(document).OfCategory(BuiltInCategory.OST_Windows).WhereElementIsNotElementType().OfType<FamilyInstance>())
@@ -58,7 +59,20 @@ public static class OtherElementReader
                 ? length.AsDouble()
                 : double.NaN);
 
-    private static ElementReading Read(Document document, Element element, string key, IReadOnlyList<QuantityReading> quantities, Guid? sharedParameter)
+    /// <summary>
+    /// How many storeys a stair repeats the railing on: the placement levels
+    /// of a multistory stair group, or the storeys of a stair whose own top
+    /// level spans several.
+    /// </summary>
+    private static int Storeys(Document document, Railing railing) => document.GetElement(railing.HostId) switch
+    {
+        Stairs stairs when stairs.MultistoryStairsId != ElementId.InvalidElementId => railing.GetMultistoryStairsPlacementLevels().Count,
+        Stairs stairs => stairs.NumberOfStories,
+        _ => 1,
+    };
+
+    private static ElementReading Read(
+        Document document, Element element, string key, IReadOnlyList<QuantityReading> quantities, Guid? sharedParameter, string? condition = null)
     {
         Element? type = document.GetElement(element.GetTypeId());
         return new ElementReading(
@@ -68,6 +82,7 @@ public static class OtherElementReader
             TypeName: type?.Name is { Length: > 0 } name ? name : "(unnamed type)",
             TypeUniqueId: type?.UniqueId ?? element.UniqueId,
             Codes: new CodesReading(Text(type, BuiltInParameter.ASSEMBLY_CODE), Text(type, BuiltInParameter.KEYNOTE_PARAM), Shared(element, type, sharedParameter)),
-            Quantities: quantities);
+            Quantities: quantities,
+            Conditions: condition is null ? [] : [condition]);
     }
 }
