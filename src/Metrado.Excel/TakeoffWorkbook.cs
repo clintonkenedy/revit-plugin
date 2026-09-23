@@ -1,3 +1,4 @@
+using System.Globalization;
 using ClosedXML.Excel;
 using Metrado.Domain;
 
@@ -37,6 +38,11 @@ public static class TakeoffWorkbook
     private const int UnitColumn = 6;
     private const int BoundaryModeColumn = 7;
 
+    /// <summary>A layer line's material, and the layers it covers (I3); blank on a whole element's line.</summary>
+    private const int MaterialColumn = 8;
+
+    private const int LayersColumn = 9;
+
     private const string CapituloLevel = "CAPITULO";
     private const string PartidaLevel = "PARTIDA";
     private const string LineaLevel = "LINEA";
@@ -49,6 +55,8 @@ public static class TakeoffWorkbook
     private const int EntryCategoryColumn = 2;
     private const int EntryFamilyColumn = 3;
     private const int EntryTypeColumn = 4;
+
+    private const int EntryMaterialColumn = 5;
 
     /// <summary>Writes <paramref name="result"/> into <paramref name="destination"/>.</summary>
     /// <remarks>
@@ -99,6 +107,8 @@ public static class TakeoffWorkbook
         sheet.Cell(HeaderRow, MetradoColumn).Value = "Metrado";
         sheet.Cell(HeaderRow, UnitColumn).Value = "Unit";
         sheet.Cell(HeaderRow, BoundaryModeColumn).Value = "Boundary mode";
+        sheet.Cell(HeaderRow, MaterialColumn).Value = "Material";
+        sheet.Cell(HeaderRow, LayersColumn).Value = "Layers";
 
         int row = HeaderRow + 1;
 
@@ -132,6 +142,11 @@ public static class TakeoffWorkbook
                     sheet.Cell(row, MetradoColumn).Value = linea.Metrado.Metrado.Value;
                     sheet.Cell(row, UnitColumn).Value = linea.Metrado.Metrado.Unit.Symbol();
                     sheet.Cell(row, BoundaryModeColumn).Value = Name(linea.Metrado.AppliedMode);
+                    if (linea.Layer is MaterialLayers layer)
+                    {
+                        sheet.Cell(row, MaterialColumn).Value = layer.Material.MaterialName;
+                        sheet.Cell(row, LayersColumn).Value = Describe(layer);
+                    }
                     row++;
                 }
             }
@@ -192,6 +207,7 @@ public static class TakeoffWorkbook
         sheet.Cell(UnclassifiedHeaderRow, EntryCategoryColumn).Value = "Category";
         sheet.Cell(UnclassifiedHeaderRow, EntryFamilyColumn).Value = "Family";
         sheet.Cell(UnclassifiedHeaderRow, EntryTypeColumn).Value = "Type";
+        sheet.Cell(UnclassifiedHeaderRow, EntryMaterialColumn).Value = "Material";
 
         int row = UnclassifiedHeaderRow + 1;
 
@@ -201,6 +217,11 @@ public static class TakeoffWorkbook
             sheet.Cell(row, EntryCategoryColumn).Value = linea.Element.CategoryName;
             sheet.Cell(row, EntryFamilyColumn).Value = linea.Element.FamilyName;
             sheet.Cell(row, EntryTypeColumn).Value = linea.Element.TypeName;
+            if (linea.Layer is MaterialLayers layer)
+            {
+                sheet.Cell(row, EntryMaterialColumn).Value = layer.Material.MaterialName;
+            }
+
             row++;
         }
     }
@@ -216,7 +237,8 @@ public static class TakeoffWorkbook
                 .Where(partida => partida.IsUnclassified)
                 .SelectMany(partida => partida.Lineas)
                 .OrderBy(linea => linea.Element.CategoryName, StringComparer.Ordinal)
-                .ThenBy(linea => linea.Element.UniqueId, StringComparer.Ordinal),
+                .ThenBy(linea => linea.Element.UniqueId, StringComparer.Ordinal)
+                .ThenBy(linea => linea.Layer?.FirstPosition ?? -1),
         ];
 
     /// <summary>
@@ -246,15 +268,32 @@ public static class TakeoffWorkbook
 
     /// <summary>The measurement lines of a partida, in the order they are written.</summary>
     /// <remarks>
-    /// <c>UniqueId</c> is the stable per-line key: it is unique per element and
-    /// non-empty by construction, so in I1 — where one element produces one line —
-    /// it orders the lines totally rather than merely consistently. The I3 material
-    /// layers that put several lines under one host <c>UniqueId</c> will need a
-    /// second key beside it, because ties here fall back to arrival order and
-    /// arrival order is exactly what must not decide anything.
+    /// <c>UniqueId</c> is the stable per-line key: unique per element and
+    /// non-empty by construction. A layered element puts one line per material
+    /// under one host <c>UniqueId</c>, so its lines are ordered by where each
+    /// material first appears, exterior (or top) first. That orders them totally:
+    /// a structure holds each position once and each layer has one material, so
+    /// no two materials of one host share a first layer, and ties never fall
+    /// back to arrival order.
     /// </remarks>
     private static IEnumerable<Linea> InOrder(Partida partida) =>
-        partida.Lineas.OrderBy(linea => linea.Element.UniqueId, StringComparer.Ordinal);
+        partida.Lineas
+            .OrderBy(linea => linea.Element.UniqueId, StringComparer.Ordinal)
+            .ThenBy(linea => linea.Layer?.FirstPosition ?? -1);
+
+    /// <summary>
+    /// A layer line's layers, exterior (or top) first: each function as the
+    /// criteria file spells it and its width in millimetres, invariant, so a
+    /// Spanish machine never writes a decimal comma. A measured material's
+    /// layers all have a function: reconciliation refuses one without.
+    /// </summary>
+    private static string Describe(MaterialLayers layer) =>
+        string.Join(" + ", layer.Layers.Select(compound => string.Format(
+            CultureInfo.InvariantCulture,
+            "{0} {1:0.###} mm{2}",
+            compound.Function,
+            compound.Width.Value * 1000,
+            compound.MaterialFromCategory ? " (category material)" : string.Empty)));
 
     /// <summary>
     /// How many measurement lines the budget sheet exports.

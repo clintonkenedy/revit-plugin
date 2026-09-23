@@ -30,7 +30,7 @@ public sealed class BudgetSheetTests
         IXLWorksheet sheet = workbook.Worksheet(SheetName);
 
         Assert.Equal(
-            ["Level", "Capitulo", "Partida", "UniqueId", "Metrado", "Unit", "Boundary mode"],
+            ["Level", "Capitulo", "Partida", "UniqueId", "Metrado", "Unit", "Boundary mode", "Material", "Layers"],
             WrittenWorkbook.RowText(sheet, HeaderRow));
     }
 

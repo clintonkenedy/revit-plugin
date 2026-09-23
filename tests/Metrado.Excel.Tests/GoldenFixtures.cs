@@ -40,6 +40,24 @@ internal static class GoldenFixtures
         };
 
     /// <summary>
+    /// The design's worked example: walls-01 is the spec's scenario, three
+    /// materials under one UniqueId; walls-02 plasters both faces with one
+    /// material, one line over two layers; walls-03 has two plasters in one
+    /// partida, exterior first; walls-04 has two materials nobody keyed.
+    /// </summary>
+    internal static TakeoffResult MaterialLayers() =>
+        TakeoffFixture.ResultOf(
+            TakeoffFixture.LayerLine("walls-01", "02.05.01", 13.11, "Enchape cerámico 30x30", (LayerFunction.Finish1, 0.010)),
+            TakeoffFixture.LayerLine("walls-01", "02.01.01", 13.11, "Ladrillo KK 18 huecos", (LayerFunction.Structure, 0.130)),
+            TakeoffFixture.LayerLine("walls-01", "02.04.01", 13.11, "Tarrajeo frotachado 1:5", (LayerFunction.Finish2, 0.015)),
+            TakeoffFixture.LayerLine("walls-02", "02.04.01", 26.22, "Tarrajeo frotachado 1:5", (LayerFunction.Finish1, 0.015), (LayerFunction.Finish2, 0.015)),
+            TakeoffFixture.LayerLine("walls-02", "02.01.01", 13.11, "Ladrillo KK 18 huecos", (LayerFunction.Structure, 0.130)),
+            TakeoffFixture.LayerLine("walls-03", "02.04.01", 13.11, "Tarrajeo frotachado 1:5", (LayerFunction.Finish1, 0.015)),
+            TakeoffFixture.LayerLine("walls-03", "02.04.01", 13.11, "Tarrajeo impermeabilizado 1:4", (LayerFunction.Finish2, 0.020)),
+            TakeoffFixture.LayerLine("walls-04", UnclassifiedResolver.Code, 9.5, "Metal Stud Layer", (LayerFunction.Structure, 0.092)),
+            TakeoffFixture.LayerLine("walls-04", UnclassifiedResolver.Code, 9.5, "Air", (LayerFunction.Insulation, 0.041)));
+
+    /// <summary>
     /// Forty measured walls and floors, twelve of which no link of the chain could
     /// code, spread over two capitulos and three partidas.
     /// </summary>

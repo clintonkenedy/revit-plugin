@@ -35,7 +35,7 @@ public sealed class UnclassifiedBlockTests
         Assert.Equal(["Unclassified elements"], WrittenWorkbook.RowText(sheet, 1));
         Assert.Equal("Count", sheet.Cell(2, 1).GetString());
         Assert.Equal(
-            ["UniqueId", "Category", "Family", "Type"],
+            ["UniqueId", "Category", "Family", "Type", "Material"],
             WrittenWorkbook.RowText(sheet, EntryHeaderRow));
     }
 
@@ -70,7 +70,7 @@ public sealed class UnclassifiedBlockTests
         IXLWorksheet sheet = workbook.Worksheet(UnclassifiedSheet);
 
         Assert.Equal(
-            ["UniqueId", "Category", "Family", "Type"],
+            ["UniqueId", "Category", "Family", "Type", "Material"],
             WrittenWorkbook.RowText(sheet, EntryHeaderRow));
         Assert.Equal(0, sheet.Cell(2, 2).GetDouble());
         Assert.Empty(Entries(workbook));
@@ -85,7 +85,7 @@ public sealed class UnclassifiedBlockTests
 
         Assert.Equal(0, sheet.Cell(2, 2).GetDouble());
         Assert.Equal(
-            ["Level", "Capitulo", "Partida", "UniqueId", "Metrado", "Unit", "Boundary mode"],
+            ["Level", "Capitulo", "Partida", "UniqueId", "Metrado", "Unit", "Boundary mode", "Material", "Layers"],
             WrittenWorkbook.RowText(workbook.Worksheet(BudgetSheet), BudgetHeaderRow));
     }
 

@@ -61,7 +61,7 @@ public sealed class ExportedLineCountTests
         // The specification asks for the headers as well as the summary, so an
         // empty run still hands the reader a workbook shaped like a budget.
         Assert.Equal(
-            ["Level", "Capitulo", "Partida", "UniqueId", "Metrado", "Unit", "Boundary mode"],
+            ["Level", "Capitulo", "Partida", "UniqueId", "Metrado", "Unit", "Boundary mode", "Material", "Layers"],
             WrittenWorkbook.RowText(sheet, HeaderRow));
     }
 
