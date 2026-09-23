@@ -111,5 +111,6 @@ For compound elements, the adapter SHALL additionally emit per-material quantiti
 
 - GIVEN a wall type composed of three material layers
 - WHEN extraction runs with material-layer takeoff enabled
-- THEN the DTO carries one quantity entry per material
+- THEN the DTO carries, for each material quantity it reads (volume, area), one entry per material Revit measures in the element
 - AND each entry identifies its material
+- AND a material used by more than one layer is one material, as Revit measures it

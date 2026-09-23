@@ -192,7 +192,7 @@ Categories measured by count SHALL have no quantity source; their metrado is the
 
 **Increment**: I3
 
-When material-layer takeoff is enabled, an element SHALL be measurable per material layer. The sum of the layer quantities for a given element MUST reconcile with that element's whole-element quantity within a stated tolerance, and a discrepancy MUST raise a validation warning.
+When material-layer takeoff is enabled, an element SHALL be measurable per material layer. The sum of the layer quantities for a given element MUST reconcile with that element's whole-element quantity within a stated tolerance, and a discrepancy MUST raise a validation warning. The stated tolerance is 1e-6 m3 on the layers' volumes; an element that does not reconcile is measured whole, never partly by layer.
 
 #### Scenario: Layer quantities reconcile with the element total
 

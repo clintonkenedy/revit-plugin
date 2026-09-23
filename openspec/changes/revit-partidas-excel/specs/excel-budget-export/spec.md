@@ -143,11 +143,11 @@ Each partida SHALL report the unit of measurement its total is expressed in, as 
 
 **Increment**: I3
 
-When material-layer takeoff is enabled, the writer SHALL emit one measurement line per material layer, each identifying its material and retaining the host element's `UniqueId`.
+When material-layer takeoff is enabled, the writer SHALL emit one measurement line per material of the element, each identifying its material and the layers it covers, and retaining the host element's `UniqueId`. A material used by more than one layer is one line, as Revit measures it; it is never split between its layers.
 
 #### Scenario: Layered wall produces one line per layer
 
-- GIVEN a wall with three material layers and layer takeoff enabled
+- GIVEN a wall with three layers of three materials and layer takeoff enabled
 - WHEN the workbook is written
 - THEN three measurement lines are emitted for that wall
 - AND all three carry the same host `UniqueId` and distinct material names
