@@ -19,18 +19,36 @@ public sealed class CompletionReportTests
     }
 
     /// <summary>
-    /// The run report counts every line and the budget sheet counts the coded
-    /// ones: the dialog names both, so "4" and "3" stop looking like a
-    /// contradiction.
+    /// The budget sheet's first row reads "Measurement lines exported" and
+    /// counts the coded lines. The dialog uses that phrase for the same
+    /// number, and names the unclassified elements separately, so the two
+    /// never give one label two values.
     /// </summary>
     [Fact]
-    public void ItSplitsTheExportedLinesIntoCodedAndUnclassified()
+    public void ItCountsExportedLinesAsTheBudgetSheetDoes()
     {
         string summary = CompletionReport.For(Report(lines: 4, unclassified: 1), Defaults(), Workbook).Summary;
 
-        Assert.Contains("4 measurement lines", summary);
-        Assert.Contains("3 coded into partidas", summary);
-        Assert.Contains("1 unclassified", summary);
+        Assert.Contains("3 measurement lines exported to the budget sheet", summary);
+        Assert.Contains("1 element listed as unclassified", summary);
+        Assert.DoesNotContain("4 measurement lines", summary);
+    }
+
+    [Fact]
+    public void OneLineIsNotCalledLines()
+    {
+        Assert.Contains("1 measurement line exported", CompletionReport.For(Report(lines: 1, unclassified: 0), Defaults(), Workbook).Summary);
+    }
+
+    /// <summary>The Pacific sample's shape: every element measured, none coded.</summary>
+    [Fact]
+    public void AnAllUnclassifiedRunIsNotReportedAsEmpty()
+    {
+        string summary = CompletionReport.For(Report(lines: 104, unclassified: 104), Defaults(), Workbook).Summary;
+
+        Assert.Contains("0 measurement lines exported to the budget sheet", summary);
+        Assert.Contains("104 elements listed as unclassified", summary);
+        Assert.DoesNotContain("No measurable elements", summary);
     }
 
     [Fact]
@@ -46,7 +64,7 @@ public sealed class CompletionReportTests
 
         Assert.Contains("No criteria file was found", summary);
         Assert.Contains(CriteriaFileLocator.FileName, summary);
-        Assert.Contains("built-in", summary);
+        Assert.Contains("built-in criteria are in force", summary);
     }
 
     [Fact]
@@ -76,6 +94,21 @@ public sealed class CompletionReportTests
         Assert.Contains(wording, summary);
     }
 
+    /// <summary>A threshold other than the default, with its sources: nothing in the line is fixed text.</summary>
+    [Fact]
+    public void ACriterionLineCarriesItsOwnThresholdAndSources()
+    {
+        EffectiveCriteria criteria = new(
+            CriteriaSet.Merge(CriteriaSet.Default, [new CategoryOverride("Walls", threshold: 0.5)]).Value,
+            ConfigSource.File,
+            @"C:\Projects\Office\metrado.criteria.json");
+
+        string summary = CompletionReport.For(Report(lines: 1, unclassified: 0), criteria, Workbook).Summary;
+
+        Assert.Contains("smaller than 0.5 m2", summary);
+        Assert.Contains("HOST_AREA_COMPUTED", summary);
+    }
+
     [Fact]
     public void EveryWarningIsListedInTheDetails()
     {
@@ -86,6 +119,8 @@ public sealed class CompletionReportTests
         Assert.Contains("2 warnings", text.Summary);
         Assert.Contains("first condition", text.Details);
         Assert.Contains("second condition", text.Details);
+        Assert.Contains("element-1", text.Details);
+        Assert.Contains("element-2", text.Details);
     }
 
     [Fact]
@@ -98,5 +133,5 @@ public sealed class CompletionReportTests
 
     private static RunReport Report(int lines, int unclassified, IReadOnlyList<string>? warnings = null) =>
         new(lines, unclassified, [],
-            [.. (warnings ?? []).Select(condition => new ValidationWarning("id", "Walls", "Basic Wall", "Generic", condition))]);
+            [.. (warnings ?? []).Select((condition, index) => new ValidationWarning($"element-{index + 1}", "Walls", "Basic Wall", "Generic", condition))]);
 }

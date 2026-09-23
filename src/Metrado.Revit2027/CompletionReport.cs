@@ -25,18 +25,22 @@ public static class CompletionReport
         summary.AppendLine(CultureInfo.InvariantCulture, $"Workbook written: {workbookPath}");
         summary.AppendLine();
 
-        // The run counts every line; the budget sheet counts the coded ones.
-        // Naming both keeps "4" here and "3" there from looking contradictory.
+        // The budget sheet's first row, "Measurement lines exported", counts
+        // the coded lines. The same phrase here means the same number, and
+        // the unclassified elements are named apart, so one label never
+        // carries two values.
+        int coded = report.ExportedLines - report.UnclassifiedCount;
         summary.AppendLine(report.NoMeasurableElements
             ? "No measurable elements were found. The workbook states zero measurement lines."
             : string.Create(
                 CultureInfo.InvariantCulture,
-                $"Exported {report.ExportedLines} measurement lines: {report.ExportedLines - report.UnclassifiedCount} coded into partidas, {report.UnclassifiedCount} unclassified."));
+                $"{coded} measurement {(coded == 1 ? "line" : "lines")} exported to the budget sheet; "
+                + $"{report.UnclassifiedCount} {(report.UnclassifiedCount == 1 ? "element" : "elements")} listed as unclassified."));
         summary.AppendLine();
 
         summary.AppendLine(criteria.Source == ConfigSource.File
-            ? $"Criteria read from {criteria.Path}:"
-            : $"No criteria file was found beside the model ({CriteriaFileLocator.FileName}), so the built-in criteria applied:");
+            ? $"Criteria in force, read from {criteria.Path}:"
+            : $"No criteria file was found beside the model ({CriteriaFileLocator.FileName}), so the built-in criteria are in force:");
         foreach (CategoryCriterion criterion in criteria.Criteria.ByCategory.Values.OrderBy(c => c.Category, StringComparer.Ordinal))
         {
             summary.AppendLine(Describe(criterion));
