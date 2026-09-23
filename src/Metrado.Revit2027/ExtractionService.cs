@@ -20,7 +20,12 @@ public static class ExtractionService
     }
 
     /// <param name="sharedParameter">The nominated shared parameter's GUID, or null when none is nominated.</param>
-    public static Extraction Extract(Document document, Guid? sharedParameter = null)
+    /// <param name="layered">
+    /// The categories taken off by material layer, whose hosts' layers are
+    /// read too (task 3.1); none when null, so nothing is read that no
+    /// criterion asks for.
+    /// </param>
+    public static Extraction Extract(Document document, Guid? sharedParameter = null, IReadOnlySet<string>? layered = null)
     {
         ArgumentNullException.ThrowIfNull(document);
 
@@ -29,11 +34,19 @@ public static class ExtractionService
         List<string> reasons = [];
 
         // Walls, floors and roofs: each opening measured or reported.
-        foreach (HostReading reading in WallReader.ReadAll(document, sharedParameter).Concat(SurfaceReader.ReadAll(document, sharedParameter)))
+        foreach (HostReading host in WallReader.ReadAll(document, sharedParameter).Concat(SurfaceReader.ReadAll(document, sharedParameter)))
         {
-            ElementTakeoff takeoff = HostTakeoff.From(reading, SquareMetres);
+            HostReading reading = layered?.Contains(host.CategoryKey) == true && document.GetElement(host.UniqueId) is HostObject element
+                ? host with { Layers = MaterialLayerReader.Read(document, element, sharedParameter) }
+                : host;
+            ElementTakeoff takeoff = HostTakeoff.From(reading, Units);
             elements.Add(takeoff);
             warnings.AddRange(HostTakeoff.Warnings(takeoff, reading));
+            if (reading.Layers is LayerReading layers)
+            {
+                warnings.AddRange(LayerTakeoff.Paint(takeoff, layers, SquareMetres));
+            }
+
             reasons.AddRange(reading.Unmeasured.Select(opening => opening.Reason));
         }
 
@@ -57,4 +70,11 @@ public static class ExtractionService
     /// <summary>Revit's own conversion from its internal square feet; never a hand-written factor.</summary>
     public static double SquareMetres(double squareFeet) =>
         UnitUtils.ConvertFromInternalUnits(squareFeet, UnitTypeId.SquareMeters);
+
+    /// <summary>Revit's own conversion from its internal cubic feet; never a hand-written factor.</summary>
+    public static double CubicMetres(double cubicFeet) =>
+        UnitUtils.ConvertFromInternalUnits(cubicFeet, UnitTypeId.CubicMeters);
+
+    /// <summary>Every conversion a host's quantities need, all Revit's own.</summary>
+    public static SeamUnits Units { get; } = new(SquareMetres, CubicMetres, Metres);
 }
