@@ -24,6 +24,32 @@
     <ProjectReference Include="..\..\src\Metrado.Revit2027\Metrado.Revit2027.csproj" />
   </ItemGroup>
 
+  <!--
+    The add-in's types implement Revit interfaces, so reading them needs the
+    Revit API metadata. The packages ship reference assemblies only, which never
+    reach an output folder on their own; they are copied to RevitApi\ for
+    MetadataLoadContext to read, and are never loaded for execution.
+  -->
+  <!--
+    The Revit API is built against the Windows desktop runtime (WindowsBase,
+    System.Drawing 10.0). Without this reference the build unifies those to
+    the 4.0 compatibility facades and warns MSB3277.
+  -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Reflection.MetadataLoadContext" Version="10.0.0" />
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPI" Version="2027.2.0" ExcludeAssets="all" GeneratePathProperty="true" />
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="2027.2.0" ExcludeAssets="all" GeneratePathProperty="true" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="$(PkgNice3point_Revit_Api_RevitAPI)\ref\net10.0-windows7.0\RevitAPI.dll" Link="RevitApi\RevitAPI.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+    <None Include="$(PkgNice3point_Revit_Api_RevitAPIUI)\ref\net10.0-windows7.0\RevitAPIUI.dll" Link="RevitApi\RevitAPIUI.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+
   <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
