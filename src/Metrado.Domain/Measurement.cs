@@ -73,9 +73,9 @@ public static class Measurement
     /// when one exists, so the <c>none</c> branch has no <see cref="Quantity"/> to
     /// pass on even if it wanted to.
     /// <para>
-    /// A criterion listing no sources at all reports <see cref="MetradoStatus.NoSource"/>
-    /// here. I2's count-based measurement branches on that empty list <em>before</em>
-    /// reaching this method, so a counted category is never reported as a category
+    /// A criterion listing no sources at all is a counted category (N1): it is
+    /// decided first, before any source is looked for, and reports
+    /// <see cref="MetradoStatus.Counted"/>, so it is never reported as a category
     /// whose sources all came up empty.
     /// </para>
     /// </remarks>

@@ -6,8 +6,10 @@ namespace Metrado.Domain;
 /// </summary>
 /// <param name="Status">What the rule concluded.</param>
 /// <param name="Result">
-/// The measured quantities, or <c>null</c> when <paramref name="Status"/> is not
-/// <see cref="MetradoStatus.Measured"/>. Nullable rather than a zeroed result,
+/// The measured quantities (for <see cref="MetradoStatus.Counted"/>, one instance
+/// in <c>u</c>), or <c>null</c> when <paramref name="Status"/> is neither
+/// <see cref="MetradoStatus.Measured"/> nor <see cref="MetradoStatus.Counted"/>.
+/// Nullable rather than a zeroed result,
 /// because a caller that forgets to check the status gets a null reference at the
 /// point of the mistake instead of a plausible zero in the workbook.
 /// </param>

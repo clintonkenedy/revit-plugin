@@ -72,6 +72,14 @@ public static class CompletionReport
     private static string Describe(CategoryCriterion criterion)
     {
         string unit = criterion.Unit.Symbol();
+
+        // N1: no source is a counted category, measured before any source is
+        // read, so no openings rule applies to it.
+        if (criterion.Sources.Count == 0)
+        {
+            return $"  {criterion.Category}: counted in {unit}, one per instance.";
+        }
+
         string threshold = criterion.Threshold.Value.ToString(CultureInfo.InvariantCulture);
         string rule = criterion.Threshold switch
         {

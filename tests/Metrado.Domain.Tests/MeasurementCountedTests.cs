@@ -68,6 +68,8 @@ public sealed class MeasurementCountedTests
 
     [Theory]
     [InlineData("Doors", QuantityUnit.SquareMetre, null)]
+    [InlineData("Doors", QuantityUnit.CubicMetre, null)]
+    [InlineData("Doors", QuantityUnit.Metre, null)]
     [InlineData("Walls", null, true)]
     public void AFileThatCountsInAnotherUnitIsRefusedNamingTheCategory(string category, QuantityUnit? unit, bool? noSources)
     {

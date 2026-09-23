@@ -120,6 +120,17 @@ public sealed class CompletionReportTests
         Assert.DoesNotContain("smaller than 0", summary);
     }
 
+    /// <summary>A counted category reads no source and applies no openings rule; the dialog says it is counted.</summary>
+    [Fact]
+    public void ACountedCategoryIsDescribedAsCounted()
+    {
+        string summary = CompletionReport.For(Report(lines: 1, unclassified: 0), Defaults(), Workbook).Summary;
+
+        Assert.Contains("  Doors: counted in u, one per instance.", summary);
+        Assert.Contains("  Windows: counted in u, one per instance.", summary);
+        Assert.DoesNotContain("from ;", summary);
+    }
+
     [Fact]
     public void EveryWarningIsListedInTheDetails()
     {
