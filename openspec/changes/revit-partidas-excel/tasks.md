@@ -1,6 +1,6 @@
 # Tasks: Revit partidas + metrado export to Excel
 
-Host marker on every task: **[mac]** runs on macOS (.NET SDK 10.0.400, `dotnet test Metrado.CrossPlatform.slnf`) — **[win]** requires the remote Windows host with Revit 2027.2 over RDP. `Metrado.Revit2027` (`net10.0-windows`) does not build on macOS; the RDP loop is slow, so [win] tasks are batched.
+Host marker on every task: **[mac]** runs on macOS (.NET SDK 10.0.400, `dotnet test Metrado.CrossPlatform.slnf`) — **[win]** requires the remote Windows host with Revit 2027.2 over RDP. `Metrado.Revit2027` (`net10.0-windows`) needs the Windows host to run inside Revit, not to compile — it builds on macOS too (see the D3 amendment) — so a [win] tag marks where a task's evidence can be produced; the RDP loop is slow, so [win] tasks are batched.
 
 Traceability tag on each task: spec capability, design decision (`D#`), or residual finding (`N1`–`N4`, `OBS`).
 

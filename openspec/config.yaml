@@ -101,7 +101,7 @@ rules:
     guidelines:
       - Follow existing code patterns once established
       - Keep Metrado.Domain free of third-party package references
-      - Do not add Metrado.Revit2027 to the cross-platform filter; it cannot build on macOS
+      - Do not add Metrado.Revit2027 to the cross-platform filter without deciding it first (D3 amendment); it builds on macOS, but its test suite needs the Windows desktop runtime
       - On the Windows host run `dotnet test Metrado.slnx`, not only the filter below; it adds Metrado.Revit2027.Tests, which the filter cannot run
     tdd: true
     test_command: "dotnet test Metrado.CrossPlatform.slnf"

@@ -1,9 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Decision D3: the only Windows-bound project and the only one referencing
-    the Revit API. It does NOT build on macOS by design, which is why
-    Metrado.CrossPlatform.slnf excludes it.
+    Decision D3: the only project referencing the Revit API. It builds on
+    macOS too: the API comes from NuGet reference assemblies, and
+    net10.0-windows without WPF or WinForms cross-compiles. What needs the
+    Windows host is running it inside Revit. Metrado.CrossPlatform.slnf
+    leaves it out because the macOS loop does not need it, not because it
+    cannot build there.
   -->
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
