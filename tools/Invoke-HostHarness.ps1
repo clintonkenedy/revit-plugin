@@ -75,6 +75,24 @@ if (Get-Process -Name Revit -ErrorAction SilentlyContinue) {
 }
 if (-not (Test-Path $Model)) { throw "Model '$Model' not found." }
 
+# Revit keeps the language it last ran in ([Language] Select= in Revit.ini,
+# UTF-16) and starts in it from then on. A run in another language puts the
+# person's own choice back once Revit has exited.
+$revitIni = Join-Path $env:APPDATA 'Autodesk\Revit\Autodesk Revit 2027\Revit.ini'
+function Get-LanguageChoice {
+    $lines = @(Get-Content $revitIni -Encoding Unicode)
+    $at = [Array]::IndexOf($lines, '[Language]')
+    if ($at -ge 0 -and $at + 1 -lt $lines.Count -and $lines[$at + 1] -like 'Select=*') { $lines[$at + 1] }
+}
+function Restore-LanguageChoice([string] $choice) {
+    $lines = [Collections.Generic.List[string]]@(Get-Content $revitIni -Encoding Unicode)
+    $at = $lines.IndexOf('[Language]')
+    if ($at -lt 0 -or $at + 1 -ge $lines.Count -or $lines[$at + 1] -notlike 'Select=*') { return }
+    if ($choice) { $lines[$at + 1] = $choice } else { $lines.RemoveRange($at, 2) }
+    Set-Content $revitIni $lines -Encoding Unicode
+}
+$languageChoice = if ($Language -and (Test-Path $revitIni)) { Get-LanguageChoice } else { $null }
+
 $project = Join-Path $PSScriptRoot 'Metrado.HostHarness\Metrado.HostHarness.csproj'
 $folder = Join-Path $AddinsRoot 'Metrado.HostHarness'
 $manifest = Join-Path $AddinsRoot 'Metrado.HostHarness.addin'
@@ -126,9 +144,11 @@ finally {
     Remove-Item $request -Force -ErrorAction SilentlyContinue
     if ($revit -and -not $revit.HasExited) {
         Write-Warning "Revit is still running; '$folder' stays until it exits. Without its manifest the harness is inert."
+        if ($Language) { Write-Warning "Revit.ini still selects $Language; set [Language] back to '$languageChoice' once Revit exits." }
     }
     else {
         Remove-Item $folder -Recurse -Force -ErrorAction SilentlyContinue
+        if ($Language -and (Test-Path $revitIni)) { Restore-LanguageChoice $languageChoice }
     }
 }
 
