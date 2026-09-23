@@ -89,6 +89,91 @@ public sealed class CriteriaFileTests
         Assert.NotNull(Refused(text).Location);
     }
 
+    /// <summary>A second object pasted after the first is not silently dropped.</summary>
+    [Fact]
+    public void TextAfterTheClosingBraceIsRefused()
+    {
+        Assert.Contains("not valid JSON", Refused("""{ "Walls": {} } { "Walls": { "threshold": 2 } }""").Message);
+    }
+
+    [Fact]
+    public void AnEntryThatIsNotAnObjectIsRefusedNamingItsCategory()
+    {
+        ConfigError error = Refused("""{ "Walls": 0.5 }""");
+
+        Assert.Equal("Walls", error.Category);
+        Assert.Equal(new ConfigLocation(1, 12), error.Location);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void AnEntryWithNoCategoryNameIsRefused(string name)
+    {
+        Assert.Contains("no category name", Refused($$"""{ "{{name}}": { "threshold": 0.5 } }""").Message);
+    }
+
+    [Fact]
+    public void AnUnsupportedUnitIsRefusedListingTheAcceptedOnes()
+    {
+        ConfigError error = Refused("""{ "Walls": { "unit": "ft2" } }""");
+
+        Assert.Equal("Walls", error.Category);
+        Assert.Equal("ft2", error.InvalidValue);
+        Assert.Contains("m2, m3, u", error.Message);
+        Assert.Equal(new ConfigLocation(1, 22), error.Location);
+    }
+
+    /// <summary>The domain is closed and spelled exactly: "Inclusive" is not "inclusive".</summary>
+    [Theory]
+    [InlineData("less-than")]
+    [InlineData("Inclusive")]
+    public void AnInvalidModeIsRefusedListingBothAcceptedValues(string mode)
+    {
+        ConfigError error = Refused($$"""{ "Walls": { "mode": "{{mode}}" } }""");
+
+        Assert.Equal("Walls", error.Category);
+        Assert.Equal(mode, error.InvalidValue);
+        Assert.Contains("exclusive", error.Message);
+        Assert.Contains("inclusive", error.Message);
+    }
+
+    /// <summary>A misspelt field ignored would leave its category on the default without a word.</summary>
+    [Fact]
+    public void AnUnknownFieldIsRefusedRatherThanIgnored()
+    {
+        ConfigError error = Refused("""{ "Walls": { "treshold": 0.5 } }""");
+
+        Assert.Equal("treshold", error.InvalidValue);
+        Assert.Contains("unit, sources, threshold, mode", error.Message);
+        Assert.Equal(new ConfigLocation(1, 14), error.Location);
+    }
+
+    [Fact]
+    public void AFieldStatedTwiceIsRefused()
+    {
+        ConfigError error = Refused("""{ "Walls": { "threshold": 0.5, "threshold": 2 } }""");
+
+        Assert.Equal("threshold", error.InvalidValue);
+        Assert.Equal(new ConfigLocation(1, 32), error.Location);
+    }
+
+    [Theory]
+    [InlineData("threshold", "\"1\"")]
+    [InlineData("threshold", "1e400")]
+    [InlineData("unit", "2")]
+    [InlineData("mode", "true")]
+    [InlineData("sources", "\"Area\"")]
+    [InlineData("sources", "[1]")]
+    [InlineData("sources", "[\"  \"]")]
+    public void AFieldOfTheWrongKindIsRefusedNamingIt(string field, string value)
+    {
+        ConfigError error = Refused($$"""{ "Walls": { "{{field}}": {{value}} } }""");
+
+        Assert.Equal("Walls", error.Category);
+        Assert.Contains($"'{field}'", error.Message);
+    }
+
     /// <summary>What only the product's own criteria can judge is left to them, and passed on as written.</summary>
     [Fact]
     public void ValuesTheDomainJudgesArePassedOnAsWritten()
