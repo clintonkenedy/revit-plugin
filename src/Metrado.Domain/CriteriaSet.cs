@@ -210,11 +210,21 @@ public sealed record CriteriaSet
             return Result<CategoryCriterion, ConfigError>.Err(threshold.Error);
         }
 
+        IReadOnlyList<string> sources = entry.Sources ?? baseline.Sources;
+        if (sources.Count == 0 && unit != QuantityUnit.Each)
+        {
+            return Result<CategoryCriterion, ConfigError>.Err(Rejected(
+                $"'{entry.Category}' lists no quantity source, so it is counted, and a count is in "
+                    + $"{QuantityUnit.Each.Symbol()}, not {unit.Symbol()}. Give it a source to measure it in {unit.Symbol()}, or the unit {QuantityUnit.Each.Symbol()}.",
+                entry.Category,
+                unit.Symbol()));
+        }
+
         return Result<CategoryCriterion, ConfigError>.Ok(
             new CategoryCriterion(
                 entry.Category,
                 unit,
-                entry.Sources ?? baseline.Sources,
+                sources,
                 threshold.Value));
     }
 

@@ -42,6 +42,20 @@ public sealed class TakeoffExportTests
         Assert.Contains(outcome.Report.Warnings, warning => warning.UniqueId == "unreadable");
     }
 
+    /// <summary>N1 as the command runs it: doors are counted into their partida, with no "no source" warning.</summary>
+    [Fact]
+    public void DoorsAreCountedIntoTheirPartida()
+    {
+        TakeoffExport.Outcome outcome = TakeoffExport.Run(
+            Defaults(),
+            [Wall("d1", "C1020", area: null) with { CategoryName = "Doors" }, Wall("d2", "C1020", area: null) with { CategoryName = "Doors" }],
+            []);
+
+        Partida partida = Assert.Single(outcome.Result.Partidas);
+        Assert.Equal(new Quantity(2, QuantityUnit.Each), partida.Total);
+        Assert.Empty(outcome.Report.Warnings);
+    }
+
     [Fact]
     public void ExtractionsOwnWarningsReachTheReport()
     {

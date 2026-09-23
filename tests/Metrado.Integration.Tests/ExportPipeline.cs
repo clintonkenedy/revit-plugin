@@ -120,7 +120,7 @@ internal static class ExportPipeline
     /// </remarks>
     private static MetradoResult Measured(ElementTakeoff element, MetradoOutcome outcome)
     {
-        if (outcome.Status == MetradoStatus.Measured && outcome.Result is not null)
+        if (outcome.Status is MetradoStatus.Measured or MetradoStatus.Counted && outcome.Result is not null)
         {
             return outcome.Result;
         }

@@ -38,4 +38,11 @@ public enum MetradoStatus
     /// wall the export could not measure.
     /// </remarks>
     NoSource = 3,
+
+    /// <summary>
+    /// A counted category (N1): its criterion lists no quantity source, so the
+    /// element counts as one instance, in <c>u</c>. Never a category whose
+    /// listed sources all came up empty; that is <see cref="NoSource"/>.
+    /// </summary>
+    Counted = 4,
 }

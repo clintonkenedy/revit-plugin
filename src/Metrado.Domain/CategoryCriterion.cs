@@ -23,6 +23,16 @@ public sealed record CategoryCriterion
     {
         Category = Guard.RequiredText(category, nameof(category));
         Sources = Guard.RequiredValue(sources, nameof(sources));
+
+        // No source means counted (N1), and a count is in units: square metres
+        // of doors is not a quantity anyone can price.
+        if (sources.Count == 0 && unit != QuantityUnit.Each)
+        {
+            throw new ArgumentException(
+                $"The {category} criterion lists no quantity source, so it counts instances, and a count is in {QuantityUnit.Each.Symbol()}, not {unit}.",
+                nameof(unit));
+        }
+
         Unit = unit;
         Threshold = threshold;
     }

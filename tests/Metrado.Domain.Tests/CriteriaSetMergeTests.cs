@@ -245,9 +245,10 @@ public sealed class CriteriaSetMergeTests
     {
         CriteriaSet defaults = TwoCategories();
 
+        // Counted, so in units (task 2.3): an empty list in m2 is refused.
         CategoryCriterion walls = Merged(
             defaults,
-            new CategoryOverride("Walls", sources: [])).ByCategory["Walls"];
+            new CategoryOverride("Walls", unit: QuantityUnit.Each, sources: [])).ByCategory["Walls"];
 
         Assert.Empty(walls.Sources);
     }

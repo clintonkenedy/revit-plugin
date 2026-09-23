@@ -87,6 +87,17 @@ public static class Measurement
         Guard.RequiredValue(element, nameof(element));
         Guard.RequiredValue(criterion, nameof(criterion));
 
+        // N1: no source listed is a counted category, decided before any source
+        // is looked for, so it is never taken for sources that came up empty.
+        if (criterion.Sources.Count == 0)
+        {
+            Quantity one = new(1, criterion.Unit);
+            return new MetradoOutcome(
+                MetradoStatus.Counted,
+                new MetradoResult(one, one, one, criterion.Threshold.Mode, criterion.Threshold.Value, ClampedToGross: false),
+                Warning: null);
+        }
+
         return SelectSource(element, criterion).Match(
             selected: raw => Apply(element, raw, OpeningAmounts(element), criterion.Threshold),
             none: () => new MetradoOutcome(

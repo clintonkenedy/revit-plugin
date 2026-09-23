@@ -102,24 +102,23 @@ public sealed class MeasurementNoSourceTests
     }
 
     /// <summary>
-    /// A criterion listing no sources at all measures nothing, even when the
-    /// element carries quantities.
+    /// A criterion listing no sources at all counts the element, even when it
+    /// carries quantities: the decision is made before any source is read.
     /// </summary>
     /// <remarks>
-    /// Correct for I1, where every criterion names its sources. Task 2.3 branches
-    /// on the empty list <em>before</em> selection so a counted category reports
-    /// <c>Counted</c> instead; this test pins what today's behaviour actually is,
-    /// so that change is a visible decision rather than a silent drift.
+    /// Until task 2.3 this reported <c>NoSource</c>, and this test pinned that
+    /// so the change would be a visible decision. N1 made it: the empty list is
+    /// a counted category, and a count is in units.
     /// </remarks>
     [Fact]
-    public void ACriterionListingNoSourcesReportsNoMetradoRatherThanZero()
+    public void ACriterionListingNoSourcesCountsTheElementEvenWithQuantities()
     {
-        MetradoOutcome outcome = Measurement.Measure(
-            WallWith(Source("HOST_AREA_COMPUTED", 12.0)),
-            Criterion());
+        CategoryCriterion counted = new("Walls", QuantityUnit.Each, [], Threshold(0, unit: QuantityUnit.Each));
 
-        Assert.Equal(MetradoStatus.NoSource, outcome.Status);
-        Assert.Null(outcome.Result);
+        MetradoOutcome outcome = Measurement.Measure(WallWith(Source("HOST_AREA_COMPUTED", 12.0)), counted);
+
+        Assert.Equal(MetradoStatus.Counted, outcome.Status);
+        Assert.Equal(new Quantity(1, QuantityUnit.Each), outcome.Result?.Metrado);
     }
 
     /// <summary>

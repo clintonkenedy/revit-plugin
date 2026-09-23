@@ -56,7 +56,7 @@ public static class TakeoffExport
 
             // Not measured (no source had a value, or units disagreed): its
             // warning above says why, and no line is invented for it.
-            if (outcome is { Status: MetradoStatus.Measured, Result: MetradoResult result })
+            if (outcome is { Status: MetradoStatus.Measured or MetradoStatus.Counted, Result: MetradoResult result })
             {
                 lineas.Add(new Linea(element, chain.Resolve(element), result));
 
