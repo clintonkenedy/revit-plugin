@@ -9,6 +9,14 @@ namespace Metrado.Configuration;
 /// <param name="Location">Where the entry's category name is written, so a later refusal can point at it.</param>
 public sealed record LocatedOverride(CategoryOverride Override, ConfigLocation Location);
 
+/// <summary>How a saved configuration names itself and sets its codification (task 3.6).</summary>
+/// <param name="Name">The name the estimator gave it.</param>
+/// <param name="SharedParameter">The shared parameter the codification chain reads third, or none.</param>
+public sealed record ConfigurationHeader(string Name, Guid? SharedParameter);
+
+/// <summary>A criteria file read: its header, if it names a configuration, and its entries in the order written.</summary>
+public sealed record CriteriaFileContent(ConfigurationHeader? Configuration, IReadOnlyList<LocatedOverride> Entries);
+
 /// <summary>
 /// Reads a criteria file (D5): JSON with comments and trailing commas, one
 /// entry per category, each field optional and inherited from the built-in
@@ -36,6 +44,13 @@ public static class CriteriaFile
 
     private const string Layers = "layers";
 
+    /// <summary>The reserved entry of a saved configuration: no category can be named so.</summary>
+    private const string ConfigurationKey = "$configuration";
+
+    private const string NameField = "name";
+
+    private const string SharedParameterField = "sharedParameter";
+
     private static readonly string[] Fields = [Unit, Sources, Threshold, Mode, Layers];
 
     private static readonly LayerFunction[] Functions = Enum.GetValues<LayerFunction>();
@@ -52,9 +67,37 @@ public static class CriteriaFile
         AllowTrailingCommas = true,
     };
 
-    /// <summary>The entries of a criteria file, in the order written, or why the file cannot be honoured.</summary>
-    /// <remarks>Lines and positions count from 1, and positions count characters, as an editor shows them.</remarks>
+    /// <summary>The entries of a criteria file beside the model, in the order written, or why the file cannot be honoured.</summary>
+    /// <remarks>
+    /// Lines and positions count from 1, and positions count characters, as an
+    /// editor shows them. A saved configuration's header is refused: beside the
+    /// model its name and shared parameter would be read and then ignored.
+    /// </remarks>
     public static Result<IReadOnlyList<LocatedOverride>, ConfigError> Parse(string text)
+    {
+        Result<(CriteriaFileContent Content, ConfigLocation? HeaderAt), ConfigError> read = ReadText(text);
+        if (!read.IsOk)
+        {
+            return Result<IReadOnlyList<LocatedOverride>, ConfigError>.Err(read.Error);
+        }
+
+        return read.Value.HeaderAt is ConfigLocation at
+            ? Refuse<IReadOnlyList<LocatedOverride>>(
+                at,
+                $"The file names a saved configuration ('{ConfigurationKey}'), which Metrado does not load from beside the model yet: leave that entry out.")
+            : Result<IReadOnlyList<LocatedOverride>, ConfigError>.Ok(read.Value.Content.Entries);
+    }
+
+    /// <summary>A criteria file or a saved configuration: its header, if any, and its entries, or why it cannot be honoured.</summary>
+    public static Result<CriteriaFileContent, ConfigError> Read(string text)
+    {
+        Result<(CriteriaFileContent Content, ConfigLocation? HeaderAt), ConfigError> read = ReadText(text);
+        return read.IsOk
+            ? Result<CriteriaFileContent, ConfigError>.Ok(read.Value.Content)
+            : Result<CriteriaFileContent, ConfigError>.Err(read.Error);
+    }
+
+    private static Result<(CriteriaFileContent Content, ConfigLocation? HeaderAt), ConfigError> ReadText(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
 
@@ -66,7 +109,7 @@ public static class CriteriaFile
         }
         catch (JsonException ex)
         {
-            return Result<IReadOnlyList<LocatedOverride>, ConfigError>.Err(
+            return Result<(CriteriaFileContent, ConfigLocation?), ConfigError>.Err(
                 new ConfigError($"The file is not valid JSON: {Reason(ex)}")
                 {
                     Location = InLine(utf8, ex.LineNumber ?? 0, ex.BytePositionInLine ?? 0),
@@ -77,7 +120,7 @@ public static class CriteriaFile
             // The reader accepts any \uXXXX escape; one standing for half of a
             // surrogate pair fails only when the text is decoded, and must stop
             // the run like any other refusal, never escape to Revit unnamed.
-            return Result<IReadOnlyList<LocatedOverride>, ConfigError>.Err(
+            return Result<(CriteriaFileContent, ConfigLocation?), ConfigError>.Err(
                 new ConfigError("A \\u escape there stands for half of a surrogate pair, which is no character.")
                 {
                     Location = At(utf8, reader.TokenStartIndex),
@@ -85,29 +128,49 @@ public static class CriteriaFile
         }
     }
 
-    private static Result<IReadOnlyList<LocatedOverride>, ConfigError> ReadFile(ref Utf8JsonReader reader, byte[] utf8)
+    private static Result<(CriteriaFileContent Content, ConfigLocation? HeaderAt), ConfigError> ReadFile(ref Utf8JsonReader reader, byte[] utf8)
     {
         if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
         {
-            return Refuse<IReadOnlyList<LocatedOverride>>(
+            return Refuse<(CriteriaFileContent, ConfigLocation?)>(
                 At(utf8, reader.TokenStartIndex),
                 "The file must be a JSON object with one entry per category, such as { \"Walls\": { \"threshold\": 1.0 } }.");
         }
 
         List<LocatedOverride> entries = [];
+        ConfigurationHeader? header = null;
+        ConfigLocation? headerAt = null;
         while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
         {
             ConfigLocation where = At(utf8, reader.TokenStartIndex);
             string category = reader.GetString()!;
             if (string.IsNullOrWhiteSpace(category))
             {
-                return Refuse<IReadOnlyList<LocatedOverride>>(where, "An entry has no category name.");
+                return Refuse<(CriteriaFileContent, ConfigLocation?)>(where, "An entry has no category name.");
             }
 
             reader.Read();
+            if (category == ConfigurationKey)
+            {
+                if (headerAt is not null)
+                {
+                    return Refuse<(CriteriaFileContent, ConfigLocation?)>(where, $"'{ConfigurationKey}' is stated twice. State it once.");
+                }
+
+                Result<ConfigurationHeader, ConfigError> read = ReadHeader(ref reader, utf8, where);
+                if (!read.IsOk)
+                {
+                    return Result<(CriteriaFileContent, ConfigLocation?), ConfigError>.Err(read.Error);
+                }
+
+                header = read.Value;
+                headerAt = where;
+                continue;
+            }
+
             if (reader.TokenType != JsonTokenType.StartObject)
             {
-                return Refuse<IReadOnlyList<LocatedOverride>>(
+                return Refuse<(CriteriaFileContent, ConfigLocation?)>(
                     At(utf8, reader.TokenStartIndex),
                     $"The entry for '{category}' must be an object of fields, such as {{ \"threshold\": 1.0 }}.",
                     category);
@@ -116,7 +179,7 @@ public static class CriteriaFile
             Result<CategoryOverride, ConfigError> entry = ReadEntry(ref reader, utf8, category);
             if (!entry.IsOk)
             {
-                return Result<IReadOnlyList<LocatedOverride>, ConfigError>.Err(entry.Error);
+                return Result<(CriteriaFileContent, ConfigLocation?), ConfigError>.Err(entry.Error);
             }
 
             entries.Add(new LocatedOverride(entry.Value, where));
@@ -127,7 +190,70 @@ public static class CriteriaFile
         {
         }
 
-        return Result<IReadOnlyList<LocatedOverride>, ConfigError>.Ok(entries);
+        return Result<(CriteriaFileContent, ConfigLocation?), ConfigError>.Ok((new CriteriaFileContent(header, entries), headerAt));
+    }
+
+    /// <summary>A saved configuration's name, which it must state, and its shared parameter's GUID, or null.</summary>
+    private static Result<ConfigurationHeader, ConfigError> ReadHeader(ref Utf8JsonReader reader, byte[] utf8, ConfigLocation where)
+    {
+        if (reader.TokenType != JsonTokenType.StartObject)
+        {
+            return Refuse<ConfigurationHeader>(
+                At(utf8, reader.TokenStartIndex),
+                $"'{ConfigurationKey}' must be an object with a \"{NameField}\", such as {{ \"{NameField}\": \"Obra Los Olivos\" }}.",
+                invalid: Written(ref reader, utf8));
+        }
+
+        string? name = null;
+        Guid? shared = null;
+        HashSet<string> stated = new(StringComparer.Ordinal);
+        while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+        {
+            ConfigLocation fieldAt = At(utf8, reader.TokenStartIndex);
+            string field = reader.GetString()!;
+            if (!stated.Add(field))
+            {
+                return Refuse<ConfigurationHeader>(fieldAt, $"'{field}' is stated twice in '{ConfigurationKey}'. State it once.", invalid: field);
+            }
+
+            reader.Read();
+            ConfigLocation valueAt = At(utf8, reader.TokenStartIndex);
+            switch (field)
+            {
+                case NameField:
+                    if (reader.TokenType != JsonTokenType.String || string.IsNullOrWhiteSpace(reader.GetString()))
+                    {
+                        return Refuse<ConfigurationHeader>(valueAt, $"'{NameField}' in '{ConfigurationKey}' must be a text naming the configuration.", invalid: Written(ref reader, utf8));
+                    }
+
+                    name = reader.GetString()!;
+                    break;
+
+                case SharedParameterField:
+                    if (reader.TokenType == JsonTokenType.Null)
+                    {
+                        break;
+                    }
+
+                    if (reader.TokenType != JsonTokenType.String || !Guid.TryParse(reader.GetString(), out Guid guid))
+                    {
+                        return Refuse<ConfigurationHeader>(
+                            valueAt,
+                            $"'{SharedParameterField}' in '{ConfigurationKey}' must be the shared parameter's GUID, such as \"4f46423f-5c26-11d4-9217-0000863f27ad\", or null.",
+                            invalid: Written(ref reader, utf8));
+                    }
+
+                    shared = guid;
+                    break;
+
+                default:
+                    return Refuse<ConfigurationHeader>(fieldAt, $"'{field}' is not a field of '{ConfigurationKey}'. Fields: {NameField}, {SharedParameterField}.", invalid: field);
+            }
+        }
+
+        return name is null
+            ? Refuse<ConfigurationHeader>(where, $"'{ConfigurationKey}' has no \"{NameField}\": a saved configuration is named.")
+            : Result<ConfigurationHeader, ConfigError>.Ok(new ConfigurationHeader(name, shared));
     }
 
     private static Result<CategoryOverride, ConfigError> ReadEntry(ref Utf8JsonReader reader, byte[] utf8, string category)
