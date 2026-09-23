@@ -40,7 +40,7 @@ Absence is never an error; a supplied file is never ignored:
 
 `Merge` is per-category then per-field coalesce: a category absent from the file keeps its default entirely; a present category inherits every field left `null` — threshold, mode, unit and sources alike. Unknown category names are rejected before merging, so a typo fails loudly instead of being ignored.
 
-**Where the files live (decided by the user, PR 17).** The criteria file is `metrado.criteria.json` **beside the model**, so criteria are versioned and shared with the project they price. The workbook is written **beside the model too, and never over an existing file**: `<model> - metrado <yyyy-MM-dd HHmm>.xlsx`, with `(2)`, `(3)` on a clash and `FileMode.CreateNew` against a race, because estimators fill unit prices into the exported copy. A model never saved, or a cloud model, has no folder for either: the export asks for it to be saved and writes nothing.
+**Where the files live (decided by the user, PR 17).** The criteria file is `metrado.criteria.json` **beside the model**, so criteria are versioned and shared with the project they price. The workbook is written **beside the model too, and never over an existing file**: `<model> - metrado <yyyy-MM-dd HHmm>.xlsx`, with `(2)`, `(3)` on a clash and `FileMode.CreateNew` against a race, because estimators fill unit prices into the exported copy. **"The model" is the central model for a workshared local copy** (review of PR 17): the local copy is per user, so a criteria file kept with the project sits beside the central, and a budget priced beside one estimator's copy would differ from everyone else's. A detached model has left its central and is worked on its own. A model never saved is asked to be saved; a cloud model, or a central on Revit Server, has no folder on disk and is told to copy the model to one, because saving again never changes the answer. Either way nothing is written. **Files reach the folder by rename:** the workbook is reserved under a temporary name in the model's folder before the model is read (so a folder that refuses writes stops the export at once), and renamed into place, never over an existing file, only when complete; a failed export leaves nothing under either name and says so in Metrado's own dialog.
 
 ## Opening Measurement (decided in PR 16, on host evidence)
 
@@ -172,10 +172,11 @@ public sealed record MetradoResult(Quantity Metrado, Quantity Raw, Quantity Gros
 
 // Staged deliberately. WarningCount and NoMeasurableElements are DERIVED, never
 // stored: a count carried beside the list it counts is a second home for one fact,
-// and the two only ever diverge in the direction that under-reports. ConfigSource /
-// ConfigPath arrive with the completion dialog that reads them (1.24) and
-// WorkbookPath with the writer that produces it (1.16) — a field no producer can
-// fill yet would have to be defaulted, and a defaulted provenance is a claim.
+// and the two only ever diverge in the direction that under-reports. Provenance
+// and the workbook's path never joined it: the completion dialog (1.24) reads
+// ConfigSource and the file's path from the EffectiveCriteria the run was measured
+// under, and the workbook's path from the command that chose it. Copying either
+// here would be that second home again.
 public sealed record RunReport(int ExportedLines, int UnclassifiedCount,
     IReadOnlyList<AppliedCriterion> Applied, IReadOnlyList<ValidationWarning> Warnings)
 {
@@ -200,7 +201,7 @@ Resolution belongs to `Metrado.Configuration` because it ends in reading a crite
 
 **No metrado is a status, not a number.** `NoSource` carries `Result = null`, so "measured as 0.0" and "no source yielded a value" are different types, not the same double; `Apply` is unreachable without a selected `Quantity`, so it cannot invent a measured zero. `Measurement.Measure` is the composition that keeps that guarantee: it reaches `Apply` only from inside `SourceSelection.Match`'s selected branch, so there is no expression of type `Quantity` derivable from an unmeasured element. `UnitMismatch` fires when any opening's or the raw quantity's `Unit` differs from the threshold's `Unit`: the comparison is refused rather than performed across unit systems. Domain never converts — conversion stays in the Revit layer.
 
-**`AppliedMode` MUST be written into the workbook**, not merely carried. `ExportTakeoffCommand` shows `RunReport` in a Revit `TaskDialog` on completion — exported total, unclassified count, effective criteria with thresholds and modes, whether no configuration file was found, and the warning list — satisfying "visible to the user without opening the workbook".
+**`AppliedMode` MUST be written into the workbook**, not merely carried. `ExportTakeoffCommand` shows `RunReport` in a Revit `TaskDialog` on completion — exported total, unclassified count, effective criteria with thresholds and modes, whether no configuration file was found, and the warning list — satisfying "visible to the user without opening the workbook". The dialog's line count uses the budget sheet's phrase for the budget sheet's number (coded lines), and names the unclassified elements apart. **The full warning list is also kept beside the workbook** as `<workbook> - warnings.txt`, headed by the dialog's summary: a long list outruns the dialog and closes with it (a reviewer showed Snowdon's 221 warnings in the Win32 task dialog Revit's `TaskDialog` resolves to: expanding the details grew it past the screen's bottom and hid the last entries, which is where a run lists the elements it left unmeasured and the threshold-band flags). This is the host side of `model-validation-warnings`' "full warning list available alongside the workbook" (I3, 3.4), delivered early because 1.24 needed it.
 
 The chain is an ordered `IReadOnlyList<ICodeResolver>` ending in `UnclassifiedResolver`, which always succeeds; an absent rule link is an absent list entry, so nothing needs stubbing. **No rule syntax, storage, ordering or UI is designed here.**
 
