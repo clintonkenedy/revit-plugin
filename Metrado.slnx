@@ -12,4 +12,7 @@
     <Project Path="tests/Metrado.Integration.Tests/Metrado.Integration.Tests.csproj" />
     <Project Path="tests/Metrado.Revit2027.Tests/Metrado.Revit2027.Tests.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Metrado.HostHarness/Metrado.HostHarness.csproj" />
+  </Folder>
 </Solution>

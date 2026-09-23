@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>Metrado host harness (development only)</Name>
+    <Assembly>Metrado.HostHarness\Metrado.HostHarness.dll</Assembly>
+    <FullClassName>Metrado.HostHarness.HarnessApplication</FullClassName>
+    <AddInId>DE57FC18-B17C-4968-8566-A1EA5825A290</AddInId>
+    <VendorId>Metrado</VendorId>
+    <VendorDescription>Development-only harness; never deployed with Metrado</VendorDescription>
+  </AddIn>
+  <ManifestSettings>
+    <UseRevitContext>False</UseRevitContext>
+    <ContextName>Metrado.HostHarness</ContextName>
+  </ManifestSettings>
+</RevitAddIns>

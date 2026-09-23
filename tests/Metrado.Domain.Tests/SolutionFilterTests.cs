@@ -42,6 +42,7 @@ public sealed class SolutionFilterTests
     [
         "src/Metrado.Revit2027/Metrado.Revit2027.csproj",
         "tests/Metrado.Revit2027.Tests/Metrado.Revit2027.Tests.csproj",
+        "tools/Metrado.HostHarness/Metrado.HostHarness.csproj",
     ];
 
     [Fact]

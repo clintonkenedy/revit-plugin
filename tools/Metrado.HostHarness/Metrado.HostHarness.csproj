@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Development tool, never deployed with Metrado. It drives one Revit 2027
+    session unattended: waits for the model Revit was started with, posts a
+    command, records every dialog that appears and closes it, then writes a
+    JSON report and exits Revit. Inert unless METRADO_HARNESS names a request
+    file, so a copy left deployed by accident does nothing.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPI" Version="2027.2.0" ExcludeAssets="runtime" />
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="2027.2.0" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Metrado.HostHarness.addin" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
