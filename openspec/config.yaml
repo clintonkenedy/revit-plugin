@@ -6,9 +6,9 @@ context: |
   quantities (metrado) from a BIM model, exported to Excel as
   capitulos -> partidas -> lineas de medicion.
   Stack: C#/.NET 10, targeting Revit 2027 only (net10.0-windows).
-  Solution: Metrado.slnx (seven projects). Metrado.CrossPlatform.slnf
-  filters out the Windows-only Metrado.Revit2027 so the Domain,
-  Configuration and Excel loop builds and tests on macOS.
+  Solution: Metrado.slnx (nine projects). Metrado.CrossPlatform.slnf
+  filters out the Windows-only Metrado.Revit2027 and its test suite so
+  the Domain, Configuration and Excel loop builds and tests on macOS.
   Dev host: macOS ARM64 with .NET SDK 10.0.400 — runs the cross-platform
   loop locally. Revit build/run/debug happens on a remote Windows host
   over RDP; tasks needing it are tagged [win].
@@ -19,10 +19,13 @@ strict_tdd_reason: >
   the workspace test command `dotnet test Metrado.CrossPlatform.slnf`
   runs green on this macOS ARM64 host, so the no-runner fallback no
   longer applies. Scope: the cross-platform projects, where the rules
-  live. Metrado.Revit2027 stays outside strict TDD because the Revit API
-  cannot be mocked (sealed types, non-constructible Document) and no
-  in-process runner is confirmed for Revit 2027 / .NET 10; that layer is
-  covered by SmokeCommand on the Windows host.
+  live, plus what of Metrado.Revit2027 can be proved without Revit
+  running: its manifest, its types' metadata and its dependency-closure
+  check, in the Windows-only Metrado.Revit2027.Tests. Its runtime
+  behaviour stays outside strict TDD because the Revit API cannot be
+  mocked (sealed types, non-constructible Document) and no in-process
+  runner is confirmed for Revit 2027 / .NET 10; that layer is covered by
+  SmokeCommand and journal evidence on the Windows host.
 
 projects:
   - path: "src/Metrado.Domain"
@@ -39,8 +42,8 @@ projects:
     framework: "xUnit"
   - path: "src/Metrado.Revit2027"
     stack: "C#/.NET 10 Windows (Nice3point.Revit.Api.* 2027.2.0)"
-    test_command: ""
-    framework: "SmokeCommand in the Revit host — Windows only, no dotnet test"
+    test_command: "dotnet test tests/Metrado.Revit2027.Tests"
+    framework: "xUnit over the built assembly's metadata (Windows only) + SmokeCommand in the Revit host"
   - path: "tests/Metrado.Domain.Tests"
     stack: "C#/.NET 10"
     test_command: "dotnet test tests/Metrado.Domain.Tests"
@@ -58,6 +61,13 @@ projects:
   - path: "tests/Metrado.Integration.Tests"
     stack: "C#/.NET 10"
     test_command: "dotnet test tests/Metrado.Integration.Tests"
+    framework: "xUnit"
+  # Windows only: targets net10.0-windows with the desktop runtime, so it is
+  # in Metrado.slnx and not in the cross-platform filter. Revit never runs in
+  # it; it reads the manifest and the built add-in's metadata. Added by 1.19.
+  - path: "tests/Metrado.Revit2027.Tests"
+    stack: "C#/.NET 10 Windows"
+    test_command: "dotnet test tests/Metrado.Revit2027.Tests"
     framework: "xUnit"
 
 open_questions:
@@ -90,6 +100,7 @@ rules:
       - Follow existing code patterns once established
       - Keep Metrado.Domain free of third-party package references
       - Do not add Metrado.Revit2027 to the cross-platform filter; it cannot build on macOS
+      - On the Windows host run `dotnet test Metrado.slnx`, not only the filter below; it adds Metrado.Revit2027.Tests, which the filter cannot run
     tdd: true
     test_command: "dotnet test Metrado.CrossPlatform.slnf"
   verify:
