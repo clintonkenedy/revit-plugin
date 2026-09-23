@@ -97,13 +97,18 @@ public sealed class HarnessApplication : IExternalApplication
                 _report.DocumentPath = document.PathName;
                 _report.ModifiedBeforeCommand = document.IsModified;
 
-                if (_request.Mode == "probe-walls")
+                if (string.Equals(_request.Mode, "probe-walls", StringComparison.OrdinalIgnoreCase))
                 {
                     Write("probing");
                     _report.Probe = WallProbe.Run(document, _request.MaxWalls);
                     _report.ModifiedAfterCommand = document.IsModified;
                     Finish(app, "done");
                     return;
+                }
+
+                if (!string.Equals(_request.Mode, "command", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException($"Unknown harness mode '{_request.Mode}'.");
                 }
 
                 RevitCommandId command = RevitCommandId.LookupCommandId(_request.CommandId)

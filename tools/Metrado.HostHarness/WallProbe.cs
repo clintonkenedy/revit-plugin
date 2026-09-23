@@ -56,10 +56,11 @@ public static class WallProbe
 
     public static Result Run(Document document, int maxWalls)
     {
-        List<Wall> walls = [.. new FilteredElementCollector(document)
-            .OfClass(typeof(Wall)).Cast<Wall>()
-            .Where(wall => wall.WallType.Kind == WallKind.Basic && !wall.IsStackedWallMember
-                && wall.Location is LocationCurve { Curve: Line }
+        // The same walls the ribbon command reads — Metrado's own filter,
+        // stacked-wall members included — narrowed to straight ones with
+        // inserts, the only ones whose outlines the probe can place.
+        List<Wall> walls = [.. Metrado.Revit2027.WallReader.Walls(document)
+            .Where(wall => wall.Location is LocationCurve { Curve: Line }
                 && wall.FindInserts(true, true, true, true).Count > 0)];
 
         // Walls holding one door and two windows first: the spec's own scenario.
@@ -96,7 +97,10 @@ public static class WallProbe
         {
             Element insert = document.GetElement(id);
             (double? cutout, double? raw, string? error, List<XYZ> outline) = Cutout(document, wall, insert);
-            double delta = SquareMetres(AreaWithout(document, wall, [id]) - area);
+            // NaN when Revit refused the deletion: never converted (UnitUtils
+            // throws on it) and never counted as "deducts nothing".
+            double without = AreaWithout(document, wall, [id]);
+            double delta = double.IsFinite(without) ? SquareMetres(without - area) : double.NaN;
             return new InsertResult(
                 insert.UniqueId,
                 insert.Category?.BuiltInCategory.ToString() ?? "none",
@@ -127,12 +131,13 @@ public static class WallProbe
                 SquareMetres(opening.AreaSquareFeet) - Truth(opening.UniqueId)))],
             [.. reading.Unmeasured.Select(opening => new ReportedVerdict(opening.UniqueId, opening.Reason, Truth(opening.UniqueId)))],
             [.. results
-                .Where(result => Math.Abs(result.DeltaM2) > 1e-6
+                .Where(result => !(Math.Abs(result.DeltaM2) <= 1e-6)
                     && !reading.Openings.Any(opening => opening.UniqueId == result.UniqueId)
                     && !reading.Unmeasured.Any(opening => opening.UniqueId == result.UniqueId))
                 .Select(result => $"{result.UniqueId} ({result.Category}, {result.DeltaM2:0.######} m2)")]);
 
-        double gross = AreaWithout(document, wall, inserts);
+        double grossFeet = AreaWithout(document, wall, inserts);
+        double gross = double.IsFinite(grossFeet) ? grossFeet : double.NaN;
         double cutoutSum = results.Sum(result => result.CutoutM2 ?? 0);
         return new WallResult(
             wall.UniqueId,
@@ -140,10 +145,10 @@ public static class WallProbe
             Metres(axis.Length),
             Metres(wall.get_Parameter(BuiltInParameter.WALL_USER_HEIGHT_PARAM)?.AsDouble() ?? double.NaN),
             Metres(wall.Width),
-            SquareMetres(area),
-            SquareMetres(gross),
+            FiniteSquareMetres(area),
+            FiniteSquareMetres(gross),
             cutoutSum,
-            SquareMetres(area) + cutoutSum - SquareMetres(gross),
+            FiniteSquareMetres(area) + cutoutSum - FiniteSquareMetres(gross),
             conditions,
             results,
             verdict);
@@ -255,6 +260,10 @@ public static class WallProbe
 
     private static double Area(Wall wall) =>
         wall.get_Parameter(BuiltInParameter.HOST_AREA_COMPUTED)?.AsDouble() ?? double.NaN;
+
+    /// <summary>NaN stays NaN: UnitUtils throws on a non-finite value.</summary>
+    private static double FiniteSquareMetres(double squareFeet) =>
+        double.IsFinite(squareFeet) ? SquareMetres(squareFeet) : double.NaN;
 
     private static double SquareMetres(double squareFeet) =>
         UnitUtils.ConvertFromInternalUnits(squareFeet, UnitTypeId.SquareMeters);

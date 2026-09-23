@@ -26,11 +26,12 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, WindowsBase
 Add-Type -Namespace MetradoHarness -Name Mouse -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
 [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint x, uint y, uint d, UIntPtr e);
 [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
 '@
 
 function Confirm-OwnUnsignedAddIn {
@@ -45,12 +46,21 @@ function Confirm-OwnUnsignedAddIn {
         ForEach-Object { $_.Current.Name }) -join ' '
     if ($text -notmatch '(?m)^Name:[ \t]+(Metrado|Metrado host harness \(development only\))[ \t]*\r?$') { return }
 
-    # The command links expose no UI Automation pattern; a click is the only way in.
+    # The command links expose no UI Automation pattern; a click is the only
+    # way in. It lands only if the prompt is in front and the point under the
+    # cursor is the button itself — otherwise nothing is clicked this round.
     $button = $prompt.FindFirst($scope, [System.Windows.Automation.PropertyCondition]::new($A::NameProperty, 'Load Once'))
-    $r = $button.Current.BoundingRectangle
-    [MetradoHarness.Mouse]::SetForegroundWindow([IntPtr]$prompt.Current.NativeWindowHandle) | Out-Null
+    if (-not $button) { return }
+    $handle = [IntPtr]$prompt.Current.NativeWindowHandle
+    [MetradoHarness.Mouse]::SetForegroundWindow($handle) | Out-Null
     Start-Sleep -Milliseconds 300
-    [MetradoHarness.Mouse]::SetCursorPos([int]($r.X + $r.Width / 2), [int]($r.Y + $r.Height / 2)) | Out-Null
+    if ([MetradoHarness.Mouse]::GetForegroundWindow() -ne $handle) { return }
+
+    $r = $button.Current.BoundingRectangle
+    $point = [System.Windows.Point]::new($r.X + $r.Width / 2, $r.Y + $r.Height / 2)
+    if ($A::FromPoint($point).Current.Name -ne 'Load Once') { return }
+
+    [MetradoHarness.Mouse]::SetCursorPos([int]$point.X, [int]$point.Y) | Out-Null
     [MetradoHarness.Mouse]::mouse_event(0x02, 0, 0, 0, [UIntPtr]::Zero)
     [MetradoHarness.Mouse]::mouse_event(0x04, 0, 0, 0, [UIntPtr]::Zero)
     Write-Host "Answered Load Once for: $(($text -split 'Publisher:')[0].Trim())"
