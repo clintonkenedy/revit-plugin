@@ -14,7 +14,11 @@ public static class CompletionReport
 {
     /// <param name="Summary">The dialog's main text.</param>
     /// <param name="Details">Every warning, for the dialog's expandable part.</param>
-    public sealed record Text(string Summary, string Details);
+    /// <param name="WarningsList">
+    /// The summary and every warning, for the file kept beside the workbook;
+    /// null when the run raised no warning.
+    /// </param>
+    public sealed record Text(string Summary, string Details, string? WarningsList);
 
     public static Text For(RunReport report, EffectiveCriteria criteria, string workbookPath)
     {
@@ -47,15 +51,22 @@ public static class CompletionReport
         }
 
         summary.AppendLine();
+        // A long list runs past the dialog's reach and closes with it, so it
+        // is also kept beside the workbook.
         summary.Append(report.WarningCount == 0
             ? "No warnings."
-            : string.Create(CultureInfo.InvariantCulture, $"{report.WarningCount} warnings: see the details below."));
+            : string.Create(
+                CultureInfo.InvariantCulture,
+                $"{report.WarningCount} warnings: see the details below, and the full list kept in {WorkbookPath.WarningsFor(workbookPath)}"));
 
         string details = string.Join(
             Environment.NewLine,
             report.Warnings.Select(warning => $"- {warning.CategoryName} {warning.UniqueId} ({warning.TypeName}): {warning.Condition}"));
 
-        return new Text(summary.ToString(), details);
+        return new Text(
+            summary.ToString(),
+            details,
+            report.WarningCount == 0 ? null : summary + Environment.NewLine + Environment.NewLine + details + Environment.NewLine);
     }
 
     private static string Describe(CategoryCriterion criterion)

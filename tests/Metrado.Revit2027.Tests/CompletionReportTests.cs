@@ -124,9 +124,37 @@ public sealed class CompletionReportTests
     }
 
     [Fact]
-    public void ARunWithoutWarningsSaysSo()
+    public void ARunWithoutWarningsSaysSoAndHasNoList()
     {
-        Assert.Contains("No warnings", CompletionReport.For(Report(lines: 1, unclassified: 0), Defaults(), Workbook).Summary);
+        CompletionReport.Text text = CompletionReport.For(Report(lines: 1, unclassified: 0), Defaults(), Workbook);
+
+        Assert.Contains("No warnings", text.Summary);
+        Assert.Null(text.WarningsList);
+    }
+
+    /// <summary>
+    /// A long list runs past the dialog's reach and closes with it; the list
+    /// kept beside the workbook is the one the estimator works through.
+    /// </summary>
+    [Fact]
+    public void TheSummaryNamesTheWarningsListBesideTheWorkbook()
+    {
+        string summary = CompletionReport.For(Report(lines: 1, unclassified: 0, warnings: ["a condition"]), Defaults(), Workbook).Summary;
+
+        Assert.Contains(WorkbookPath.WarningsFor(Workbook), summary);
+    }
+
+    /// <summary>Opened on its own, days later, the list still says which export it belongs to and what was decided.</summary>
+    [Fact]
+    public void TheWarningsListCarriesTheSummaryAndEveryWarning()
+    {
+        CompletionReport.Text text = CompletionReport.For(
+            Report(lines: 2, unclassified: 0, warnings: ["first condition", "second condition"]), Defaults(), Workbook);
+
+        Assert.NotNull(text.WarningsList);
+        Assert.StartsWith(text.Summary, text.WarningsList);
+        Assert.Contains("- Walls element-1 (Generic): first condition", text.WarningsList);
+        Assert.Contains("- Walls element-2 (Generic): second condition", text.WarningsList);
     }
 
     private static EffectiveCriteria Defaults() => new(CriteriaSet.Default, ConfigSource.BuiltInDefaults, path: null);

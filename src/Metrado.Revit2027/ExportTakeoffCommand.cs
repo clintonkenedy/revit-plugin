@@ -11,7 +11,8 @@ namespace Metrado.Revit2027;
 /// The ribbon button's command: extract → resolve → measure → codify →
 /// group → write, then report. <c>ReadOnly</c> is the read-only guarantee
 /// where Revit itself enforces it: the command reads the model and writes
-/// only the workbook, a file beside the model, never the document.
+/// only the workbook and its warnings list, beside the model, never the
+/// document.
 /// </summary>
 [Transaction(TransactionMode.ReadOnly)]
 public sealed class ExportTakeoffCommand : IExternalCommand
@@ -27,16 +28,17 @@ public sealed class ExportTakeoffCommand : IExternalCommand
             return Result.Cancelled;
         }
 
-        // The workbook and the criteria file both live beside the model; a
-        // model never saved (or a cloud model) has no folder for either.
-        string? workbook = WorkbookPath.For(document.PathName, DateTime.Now, File.Exists);
-        if (workbook is null)
+        ModelLocation location = ModelLocation.Of(document.PathName, CentralPath(document), document.IsModelInCloud);
+        if (location.Refusal is not null)
         {
-            TaskDialog.Show(Title, "Save the model first. The workbook is written beside it, and the criteria file is looked for there.");
+            TaskDialog.Show(Title, location.Refusal);
             return Result.Cancelled;
         }
 
-        (CriteriaFileLookup lookup, string? criteriaPath) = CriteriaFileLocator.Locate(document.PathName);
+        // The location is a model in a folder on disk, which always names a workbook.
+        string workbook = WorkbookPath.For(location.Path, DateTime.Now, File.Exists)!;
+
+        (CriteriaFileLookup lookup, string? criteriaPath) = CriteriaFileLocator.Locate(location.Path);
         Result<EffectiveCriteria, ConfigError> criteria = CriteriaResolver.Resolve(lookup, criteriaPath);
         if (!criteria.IsOk)
         {
@@ -46,18 +48,28 @@ public sealed class ExportTakeoffCommand : IExternalCommand
             return Result.Cancelled;
         }
 
-        ExtractionService.Extraction extraction = ExtractionService.Extract(document);
-        TakeoffExport.Outcome outcome = TakeoffExport.Run(criteria.Value, extraction.Elements, extraction.Warnings);
-
-        // CreateNew, never Create: the name was chosen free, and if anything
-        // took it since, failing beats replacing an estimator's priced copy.
-        using (FileStream stream = new(workbook, FileMode.CreateNew, FileAccess.Write))
+        CompletionReport.Text report;
+        try
         {
-            TakeoffWorkbook.Write(outcome.Result, stream);
-        }
+            // Reserved before the model is read: a folder that refuses writes
+            // stops the export before the long read, not after it.
+            using ExportFiles files = ExportFiles.Reserve(workbook);
 
-        CompletionReport.Text report = CompletionReport.For(outcome.Report, criteria.Value, workbook);
-        Journal(commandData, report, extraction);
+            ExtractionService.Extraction extraction = ExtractionService.Extract(document);
+            TakeoffExport.Outcome outcome = TakeoffExport.Run(criteria.Value, extraction.Elements, extraction.Warnings);
+            TakeoffWorkbook.Write(outcome.Result, files.Workbook);
+
+            report = CompletionReport.For(outcome.Report, criteria.Value, workbook);
+            files.Commit(report.WarningsList);
+            Journal(commandData, report, extraction);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            string failure = $"No workbook was written to {Path.GetDirectoryName(workbook)}. {ex.Message}";
+            commandData.Application.Application.WriteJournalComment($"Metrado: {failure}", true);
+            TaskDialog.Show(Title, failure);
+            return Result.Cancelled;
+        }
 
         TaskDialog dialog = new(Title)
         {
@@ -67,6 +79,21 @@ public sealed class ExportTakeoffCommand : IExternalCommand
         };
         dialog.Show();
         return Result.Succeeded;
+    }
+
+    /// <summary>
+    /// The central model's path for a workshared local copy; null otherwise.
+    /// A detached model has left its central behind and is worked on its own.
+    /// </summary>
+    private static string? CentralPath(Document document)
+    {
+        if (!document.IsWorkshared || document.IsDetached)
+        {
+            return null;
+        }
+
+        ModelPath? central = document.GetWorksharingCentralModelPath();
+        return central is null || central.Empty ? null : ModelPathUtils.ConvertModelPathToUserVisiblePath(central);
     }
 
     /// <summary>The journal keeps what the dialog showed, and why each opening was reported.</summary>
