@@ -19,7 +19,7 @@ public static class LayerMeasurement
     /// Whether Revit's materials account for all of the element, checked in
     /// order: its layers were read; its whole volume was, in m3; each
     /// material's volume and area were read once, in their units, finite and
-    /// not negative; every layer of positive width is a material Revit
+    /// not negative; every layer, a membrane included, is a material Revit
     /// measures, and every such material is on a layer; every layer has a
     /// function; and the volumes add up to the whole within the tolerance.
     /// </summary>
@@ -71,7 +71,8 @@ public static class LayerMeasurement
             return Fault(whole, sum, volumes.Count, LayerFault.NonFiniteOrNegative, half);
         }
 
-        if (structure.Layers.FirstOrDefault(layer => layer.Width.Value > 0 && (layer.MaterialId is null || !measured.Contains(layer.MaterialId))) is CompoundLayer lost)
+        // A membrane too: it has no volume to miss, but its area is what prices it.
+        if (structure.Layers.FirstOrDefault(layer => layer.MaterialId is null || !measured.Contains(layer.MaterialId)) is CompoundLayer lost)
         {
             return Fault(whole, sum, volumes.Count, LayerFault.UnattributedLayer, $"{lost.Position} ({lost.Function?.ToString() ?? "no function"})");
         }

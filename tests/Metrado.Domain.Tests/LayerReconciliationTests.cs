@@ -2,8 +2,8 @@ namespace Metrado.Domain.Tests;
 
 /// <summary>
 /// Pins when a layered element may be measured by its layers (task 3.2):
-/// only when Revit's materials account for all of it — every layer of
-/// positive width attributed to a material Revit measures, every such
+/// only when Revit's materials account for all of it — every layer, a
+/// membrane included, attributed to a material Revit measures, every such
 /// material to a layer, each read once and in its unit, and their volumes
 /// adding up to the whole to a cubic centimetre. Otherwise the element is
 /// measured whole, with the fault named: a layer line never makes up for a
@@ -54,11 +54,11 @@ public sealed class LayerReconciliationTests
         Assert.Equal(3, reconciliation.Terms);
     }
 
-    /// <summary>A membrane of no width has nothing to attribute: its layer never faults the element.</summary>
+    /// <summary>A membrane Revit measures has no volume but its area: it reconciles, and is priced by its line.</summary>
     [Fact]
-    public void AMembraneWithoutAMeasuredMaterialIsNoFault()
+    public void AMembraneRevitMeasuresReconciles()
     {
-        ElementTakeoff wall = Wall(layers: [.. WallLayers, Layer(3, LayerFunction.Membrane, 0.0, "vapour")]);
+        ElementTakeoff wall = Wall([.. WallQuantities(), Volume("vapour", 0.0), Area("vapour", 12.51)], [.. WallLayers, Layer(3, LayerFunction.Membrane, 0.0, "vapour")]);
 
         Assert.True(LayerMeasurement.Reconcile(wall).Reconciles);
     }
@@ -75,8 +75,12 @@ public sealed class LayerReconciliationTests
         { "a negative volume", () => Wall([.. WallQuantities().Select(q => q.SourceKey == LayerSources.MaterialVolume && q.Material!.MaterialId == "tile" ? Volume("tile", -0.1) : q)]), LayerFault.NonFiniteOrNegative },
         { "a volume that is not a number", () => Wall([.. WallQuantities().Select(q => q.SourceKey == LayerSources.HostVolume ? Whole(double.NaN) : q)]), LayerFault.NonFiniteOrNegative },
         { "a material with no area", () => Wall([.. WallQuantities().Where(q => !(q.SourceKey == LayerSources.MaterialArea && q.Material!.MaterialId == "tile"))]), LayerFault.NonFiniteOrNegative },
+        { "a material with no volume", () => Wall([.. WallQuantities().Where(q => !(q.SourceKey == LayerSources.MaterialVolume && q.Material!.MaterialId == "tile")), Whole(1.81395)]), LayerFault.NonFiniteOrNegative },
+        { "a negative area", () => Wall([.. WallQuantities().Select(q => q.SourceKey == LayerSources.MaterialArea && q.Material!.MaterialId == "tile" ? Area("tile", -1.0) : q)]), LayerFault.NonFiniteOrNegative },
         { "a layer Revit does not measure", () => Wall(layers: [.. WallLayers, Layer(3, LayerFunction.Insulation, 0.05, "wool")]), LayerFault.UnattributedLayer },
         { "a layer with no material", () => Wall(layers: [.. WallLayers, Layer(3, LayerFunction.Insulation, 0.05, null)]), LayerFault.UnattributedLayer },
+        { "a membrane with no material", () => Wall(layers: [.. WallLayers, Layer(3, LayerFunction.Membrane, 0.0, null)]), LayerFault.UnattributedLayer },
+        { "a membrane Revit does not measure", () => Wall(layers: [.. WallLayers, Layer(3, LayerFunction.Membrane, 0.0, "vapour")]), LayerFault.UnattributedLayer },
         { "a material on no layer", () => Wall([.. WallQuantities(), Volume("paint", 0.0), Area("paint", 1.0)]), LayerFault.UnattributedMaterial },
         { "a layer with no function", () => Wall(layers: [WallLayers[0], Layer(1, null, 0.130, "brick"), WallLayers[2]]), LayerFault.NoFunction },
         { "volumes that miss the whole", () => Wall([.. WallQuantities().Select(q => q.SourceKey == LayerSources.HostVolume ? Whole(1.94) : q)]), LayerFault.OutOfTolerance },
@@ -92,7 +96,7 @@ public sealed class LayerReconciliationTests
         Assert.Equal(fault, reconciliation.Fault);
     }
 
-    /// <summary>A cubic centimetre, fixed: the seam's rounding is a millionth of that, the smallest real material three thousand times it.</summary>
+    /// <summary>A cubic centimetre, fixed: the seam's rounding is a thousandth of that, the smallest real material three thousand times it.</summary>
     [Theory]
     [InlineData(1.93905 + 0.9e-6, true)]
     [InlineData(1.93905 - 0.9e-6, true)]
