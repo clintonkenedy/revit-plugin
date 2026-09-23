@@ -32,6 +32,9 @@ internal sealed class WrittenBudget
     private const string UniqueIdHeader = "UniqueId";
     private const string MetradoHeader = "Metrado";
     private const string BoundaryModeHeader = "Boundary mode";
+    private const string UnitHeader = "Unit";
+    private const string MaterialHeader = "Material";
+    private const string LayersHeader = "Layers";
 
     private const string PartidaLevel = "PARTIDA";
     private const string LineaLevel = "LINEA";
@@ -74,6 +77,26 @@ internal sealed class WrittenBudget
             .. BodyRows(Sheet, HeaderRow)
                 .Where(row => Sheet.Cell(row, level).GetString() == LineaLevel)
                 .Select(row => Sheet.Cell(row, identifier).GetString()),
+        ];
+    }
+
+    /// <summary>The measurement lines that name a material, in written order: partida, identifier, material, layers, metrado and unit.</summary>
+    internal IReadOnlyList<(string Partida, string UniqueId, string Material, string Layers, double Metrado, string Unit)> LayerLines()
+    {
+        int level = ColumnOf(Sheet, HeaderRow, LevelHeader);
+        int material = ColumnOf(Sheet, HeaderRow, MaterialHeader);
+
+        return
+        [
+            .. BodyRows(Sheet, HeaderRow)
+                .Where(row => Sheet.Cell(row, level).GetString() == LineaLevel && Sheet.Cell(row, material).GetString().Length > 0)
+                .Select(row => (
+                    Sheet.Cell(row, ColumnOf(Sheet, HeaderRow, PartidaHeader)).GetString(),
+                    Sheet.Cell(row, ColumnOf(Sheet, HeaderRow, UniqueIdHeader)).GetString(),
+                    Sheet.Cell(row, material).GetString(),
+                    Sheet.Cell(row, ColumnOf(Sheet, HeaderRow, LayersHeader)).GetString(),
+                    Math.Round(Sheet.Cell(row, ColumnOf(Sheet, HeaderRow, MetradoHeader)).GetDouble(), 9),
+                    Sheet.Cell(row, ColumnOf(Sheet, HeaderRow, UnitHeader)).GetString())),
         ];
     }
 

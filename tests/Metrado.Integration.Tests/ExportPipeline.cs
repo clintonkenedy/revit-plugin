@@ -70,7 +70,13 @@ internal static class ExportPipeline
 
         foreach (ElementTakeoff element in model)
         {
-            MetradoOutcome outcome = Measurement.Measure(element, CriterionFor(criteria, element));
+            CategoryCriterion criterion = CriterionFor(criteria, element);
+            if (criterion.Layers is not null && ByLayer(element, criterion, chain, lineas, warnings))
+            {
+                continue;
+            }
+
+            MetradoOutcome outcome = Measurement.Measure(element, criterion);
 
             if (outcome.Warning is not null)
             {
@@ -83,6 +89,33 @@ internal static class ExportPipeline
         TakeoffResult result = TakeoffResult.Group(lineas);
 
         return new ExportRun(criteria, result, RunReport.For(result, warnings), Written(result));
+    }
+
+    /// <summary>
+    /// A layered element's lines, one per material and coded by it, as the
+    /// command's <c>TakeoffExport</c> takes them; false when the element must
+    /// be measured whole, its reason among the warnings.
+    /// </summary>
+    private static bool ByLayer(ElementTakeoff element, CategoryCriterion criterion, CodificationChain chain, List<Linea> lineas, List<ValidationWarning> warnings)
+    {
+        IReadOnlyList<LayerLine>? lines = LayerMeasurement.Measure(element, criterion).Match<IReadOnlyList<LayerLine>?>(
+            byLayer: (measured, raised) =>
+            {
+                warnings.AddRange(raised);
+                return measured;
+            },
+            whole: why =>
+            {
+                warnings.Add(why);
+                return null;
+            });
+        if (lines is null)
+        {
+            return false;
+        }
+
+        lineas.AddRange(lines.Select(line => new Linea(element, chain.ResolveLayer(element, line.Layer.Material), line.Metrado, line.Layer)));
+        return true;
     }
 
     /// <summary>The criterion the criteria in force define for this element's category.</summary>
