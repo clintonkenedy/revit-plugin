@@ -62,6 +62,13 @@ public sealed class GoldenFixtureTests
             GoldenFixtures.ZeroUnclassifiedName,
             GoldenFixtures.ZeroUnclassified());
 
+    /// <summary>Task 2.5's golden: each partida in its own unit, and a capitulo split by unit stating no total.</summary>
+    [Fact]
+    public void TheWriterStillReproducesTheMixedUnitsReference() =>
+        GoldenWorkbook.AssertReproduces(
+            GoldenFixtures.MixedUnitsName,
+            GoldenFixtures.MixedUnits());
+
     [Fact]
     public void TheStoredReferenceForAnEmptyRunCarriesHeadersAndStatesZero()
     {

@@ -26,6 +26,9 @@ internal static class GoldenFixtures
     /// <summary>A model containing no elements in any supported category.</summary>
     internal const string EmptyResultName = "empty-result.xlsx";
 
+    /// <summary>Walls in m2, counted doors in u, railings in m, and one partida whose lines came in two units (task 2.5).</summary>
+    internal const string MixedUnitsName = "mixed-units.xlsx";
+
     /// <summary>Every stored reference workbook, by file name.</summary>
     internal static IReadOnlyDictionary<string, TakeoffResult> All =>
         new Dictionary<string, TakeoffResult>(StringComparer.Ordinal)
@@ -33,6 +36,7 @@ internal static class GoldenFixtures
             [TwelveOfFortyName] = TwelveOfForty(),
             [ZeroUnclassifiedName] = ZeroUnclassified(),
             [EmptyResultName] = EmptyResult(),
+            [MixedUnitsName] = MixedUnits(),
         };
 
     /// <summary>
@@ -66,6 +70,15 @@ internal static class GoldenFixtures
 
     /// <summary>A run that measured nothing at all.</summary>
     internal static TakeoffResult EmptyResult() => TakeoffFixture.ResultOf();
+
+    internal static TakeoffResult MixedUnits() =>
+        TakeoffFixture.ResultOf(
+            TakeoffFixture.Line("walls-01", "C1010", metrado: 12.5),
+            TakeoffFixture.Line("walls-02", "C1010", metrado: 7.25),
+            TakeoffFixture.Line("walls-03", "C1010", metrado: 1, unit: QuantityUnit.Each),
+            TakeoffFixture.Line("doors-01", "C1020", metrado: 1, capitulo: "Doors", unit: QuantityUnit.Each),
+            TakeoffFixture.Line("doors-02", "C1020", metrado: 1, capitulo: "Doors", unit: QuantityUnit.Each),
+            TakeoffFixture.Line("railings-01", "C2030", metrado: 14.2, capitulo: "Railings", unit: QuantityUnit.Metre));
 
     private static Linea Coded(int n, string partidaCode, string capitulo) =>
         TakeoffFixture.Line(
