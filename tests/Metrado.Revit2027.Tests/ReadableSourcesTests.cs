@@ -65,5 +65,24 @@ public sealed class ReadableSourcesTests
         Assert.NotNull(ReadableSources.Check(new CriteriaSet(new Dictionary<string, CategoryCriterion> { ["Railings"] = railings })));
     }
 
+    /// <summary>Until the export measures by layer, criteria asking for it are refused rather than silently measured whole.</summary>
+    [Theory]
+    [InlineData("Walls")]
+    [InlineData("Floors")]
+    [InlineData("Roofs")]
+    public void ACategoryTakenOffByLayerIsRefusedUntilTheExportReadsLayers(string category)
+    {
+        ConfigError error = Assert.IsType<ConfigError>(ReadableSources.Check(Criteria(new CategoryOverride(category, layers: LayerOverride.On(new Dictionary<LayerFunction, QuantityUnit>())))));
+
+        Assert.Contains($"take {category} off by material layer", error.Message, StringComparison.Ordinal);
+        Assert.Empty(ReadableSources.LayeredCategories);
+    }
+
+    [Fact]
+    public void LayersStatedOffAreNoRefusal()
+    {
+        Assert.Null(ReadableSources.Check(Criteria(new CategoryOverride("Walls", layers: LayerOverride.Off))));
+    }
+
     private static CriteriaSet Criteria(CategoryOverride entry) => CriteriaSet.Merge(CriteriaSet.Default, [entry]).Value;
 }
