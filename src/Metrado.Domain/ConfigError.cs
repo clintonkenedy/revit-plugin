@@ -4,8 +4,9 @@ namespace Metrado.Domain;
 /// Where in a configuration file the failure was detected.
 /// </summary>
 /// <remarks>
-/// Plain numbers, not a parser exception. The JSON reader's line and byte
-/// position are copied into this type by <c>Metrado.Configuration</c>; carrying
+/// Plain numbers, not a parser exception. Lines and positions count from 1, as
+/// an editor shows them (positions in bytes of UTF-8); <c>Metrado.Configuration</c>
+/// converts the JSON reader's 0-based numbers into them. Carrying
 /// the exception itself would drag <c>System.Text.Json</c> into Domain, and on
 /// the netstandard2.0 leg that package is not in-box — it pulls five more
 /// assemblies and falsifies decision D1.
