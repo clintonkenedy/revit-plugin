@@ -11,21 +11,12 @@ namespace Metrado.Integration.Tests;
 /// write the workbook.
 /// </summary>
 /// <remarks>
-/// <b>This composition is test-side, and that is a known gap rather than a
-/// preference.</b> The shipped composition is <c>ExportTakeoffCommand</c>, task
-/// 1.24, which is <c>[win]</c> — it lives in <c>Metrado.Revit2027</c> and cannot be
-/// built on macOS. So this suite proves that the six stages <em>can</em> compose
-/// into a correct budget; it does not prove that the command composes them this
-/// way. If 1.24 wires them differently, these tests keep passing over a pipeline
-/// nobody ships.
-/// <para>
-/// The mitigation is direction, not duplication: 1.24 should call the stages in
-/// this order and nothing else, and this file is the reference for what that order
-/// is. Turning it into production code on the macOS side would mean inventing an
-/// orchestration layer the design does not have — the design puts the wiring in the
-/// Revit command, and the seam that makes it testable is the DTO, not a second
-/// orchestrator.
-/// </para>
+/// The measurement is the shipped one: Domain's <see cref="TakeoffPass"/>,
+/// which the command's <c>TakeoffExport</c> runs too, measures, codes and
+/// validates every element. What stays test-side is only the composition
+/// around it, grouping, the run report and the writer, which the command
+/// cannot share with a macOS suite because it lives in <c>Metrado.Revit2027</c>;
+/// it is three calls, in the same order as the command's.
 /// </remarks>
 internal static class ExportPipeline
 {
@@ -63,104 +54,32 @@ internal static class ExportPipeline
     /// </param>
     internal static ExportRun Run(EffectiveCriteria criteria, IReadOnlyList<ElementTakeoff> model)
     {
-        CodificationChain chain = CodificationChain.Standard(sharedParameter: null);
+        TakeoffPass.Outcome pass = TakeoffPass.Run(criteria.Criteria, model, CodificationChain.Standard(sharedParameter: null));
+        RequireEveryElementMeasured(model, pass);
 
-        List<Linea> lineas = [];
-        List<ValidationWarning> warnings = [];
+        TakeoffResult result = TakeoffResult.Group(pass.Lines);
 
-        foreach (ElementTakeoff element in model)
-        {
-            CategoryCriterion criterion = CriterionFor(criteria, element);
-            if (criterion.Layers is not null && ByLayer(element, criterion, chain, lineas, warnings))
-            {
-                continue;
-            }
-
-            MetradoOutcome outcome = Measurement.Measure(element, criterion);
-
-            if (outcome.Warning is not null)
-            {
-                warnings.Add(outcome.Warning);
-            }
-
-            lineas.Add(new Linea(element, chain.Resolve(element), Measured(element, outcome)));
-        }
-
-        TakeoffResult result = TakeoffResult.Group(lineas);
-
-        return new ExportRun(criteria, result, RunReport.For(result, warnings), Written(result));
+        return new ExportRun(criteria, result, RunReport.For(result, pass.Warnings), Written(result));
     }
 
     /// <summary>
-    /// A layered element's lines, one per material and coded by it, as the
-    /// command's <c>TakeoffExport</c> takes them; false when the element must
-    /// be measured whole, its reason among the warnings.
-    /// </summary>
-    private static bool ByLayer(ElementTakeoff element, CategoryCriterion criterion, CodificationChain chain, List<Linea> lineas, List<ValidationWarning> warnings)
-    {
-        IReadOnlyList<LayerLine>? lines = LayerMeasurement.Measure(element, criterion).Match<IReadOnlyList<LayerLine>?>(
-            byLayer: (measured, raised) =>
-            {
-                warnings.AddRange(raised);
-                return measured;
-            },
-            whole: why =>
-            {
-                warnings.Add(why);
-                return null;
-            });
-        if (lines is null)
-        {
-            return false;
-        }
-
-        lineas.AddRange(lines.Select(line => new Linea(element, chain.ResolveLayer(element, line.Layer.Material), line.Metrado, line.Layer)));
-        return true;
-    }
-
-    /// <summary>The criterion the criteria in force define for this element's category.</summary>
-    /// <exception cref="InvalidOperationException">
-    /// The category has no criterion. I1 measures Walls only, so this is a model the
-    /// test described wrongly rather than a condition the pipeline must survive —
-    /// I2's "a supported-category element with no applicable criterion" warning
-    /// (task 3.3) is what handles it for real.
-    /// </exception>
-    private static CategoryCriterion CriterionFor(EffectiveCriteria criteria, ElementTakeoff element)
-    {
-        if (criteria.Criteria.ByCategory.TryGetValue(element.CategoryName, out CategoryCriterion? criterion))
-        {
-            return criterion;
-        }
-
-        throw new InvalidOperationException(
-            $"The criteria in force define no criterion for '{element.CategoryName}'. "
-                + $"Configured categories: {string.Join(", ", criteria.Criteria.ByCategory.Keys)}.");
-    }
-
-    /// <summary>
-    /// Unwraps a measurement this suite's model is supposed to produce.
+    /// Fails on an element of the model that gave no line.
     /// </summary>
     /// <remarks>
-    /// Every element in the fixture is measurable, so a refusal here means the
-    /// model was described wrongly and the assertions downstream would be reading a
-    /// budget with a wall silently missing from it. Failing at the refusal names the
-    /// element; failing later would only show a total that is quietly too small.
-    /// <para>
-    /// A test that needs the <c>NoSource</c> or <c>UnitMismatch</c> path adds the
-    /// branch it needs along with itself. Writing those branches now would be
-    /// speculation no assertion covers.
-    /// </para>
+    /// Every element in the fixtures is measurable, so one with no line means
+    /// the model was described wrongly, and the assertions downstream would be
+    /// reading a budget with a wall silently missing from it. Failing here names
+    /// the element and why; failing later would only show a total that is
+    /// quietly too small.
     /// </remarks>
-    private static MetradoResult Measured(ElementTakeoff element, MetradoOutcome outcome)
+    private static void RequireEveryElementMeasured(IReadOnlyList<ElementTakeoff> model, TakeoffPass.Outcome pass)
     {
-        if (outcome.Status is MetradoStatus.Measured or MetradoStatus.Counted && outcome.Result is not null)
+        if (model.FirstOrDefault(element => !pass.Lines.Any(line => line.Element.UniqueId == element.UniqueId)) is ElementTakeoff missing)
         {
-            return outcome.Result;
+            throw new InvalidOperationException(
+                $"Element '{missing.UniqueId}' was not measured: "
+                    + string.Join(" ", pass.Warnings.Where(warning => warning.UniqueId == missing.UniqueId).Select(warning => warning.Condition)));
         }
-
-        throw new InvalidOperationException(
-            $"Element '{element.UniqueId}' was not measured ({outcome.Status}): "
-                + $"{outcome.Warning?.Condition ?? "no warning was raised"}.");
     }
 
     /// <summary>

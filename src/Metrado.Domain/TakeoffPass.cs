@@ -15,7 +15,8 @@ namespace Metrado.Domain;
 /// element whose openings exceed its gross quantity; a layered element whose
 /// materials do not account for it; an opening near the threshold; a layer
 /// measured as its category's material. The export composes this pass with
-/// grouping and the run report.
+/// grouping and the run report, and the integration suite does the same, so
+/// both run the one composition.
 /// </remarks>
 public static class TakeoffPass
 {

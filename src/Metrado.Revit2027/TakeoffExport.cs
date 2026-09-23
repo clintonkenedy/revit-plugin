@@ -7,8 +7,9 @@ namespace Metrado.Revit2027;
 /// measures, codes and validates every element (task 3.3), then grouping and
 /// the run report. Uses no Revit type.
 ///
-/// It adds to the pass only what the command has and a test model does not:
-/// the warnings extraction raised.
+/// The integration suite's test-side <c>ExportPipeline</c> runs the same pass,
+/// so the two compose the one measurement; this adds only what the command
+/// has and a test model does not, the warnings extraction raised.
 /// </summary>
 public static class TakeoffExport
 {
