@@ -55,10 +55,20 @@
     suite's deps.json is not a substitute: the desktop runtime referenced above
     supplies System.IO.Packaging and drops it from this suite's graph, while
     the add-in, deployed on its own, has to carry it.
+
+    It is taken from beside the add-in assembly this build actually copied,
+    never from a spelled-out bin path: under another configuration or a
+    redirected output (artifacts path) that path holds a stale file, and the
+    suite would pin the closure against it.
   -->
-  <ItemGroup>
-    <None Include="..\..\src\Metrado.Revit2027\bin\$(Configuration)\net10.0-windows\Metrado.Revit2027.deps.json" Link="AddIn\Metrado.Revit2027.deps.json" CopyToOutputDirectory="PreserveNewest" Visible="false" />
-  </ItemGroup>
+  <Target Name="CopyAddInDependencyManifest" AfterTargets="CopyFilesToOutputDirectory">
+    <ItemGroup>
+      <_AddInAssembly Include="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)%(Extension)' == 'Metrado.Revit2027.dll'" />
+      <_AddInDependencyManifest Include="@(_AddInAssembly->'%(RootDir)%(Directory)%(Filename).deps.json')" />
+    </ItemGroup>
+    <Error Condition="'@(_AddInDependencyManifest)' == '' Or !Exists('@(_AddInDependencyManifest)')" Text="Metrado.Revit2027.deps.json was not found beside the resolved add-in assembly '@(_AddInAssembly)'." />
+    <Copy SourceFiles="@(_AddInDependencyManifest)" DestinationFolder="$(OutDir)AddIn" />
+  </Target>
 
   <ItemGroup>
     <Using Include="Xunit" />
