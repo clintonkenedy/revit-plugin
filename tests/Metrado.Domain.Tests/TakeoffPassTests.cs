@@ -66,6 +66,46 @@ public sealed class TakeoffPassTests
         Assert.Contains("Opening hatch measures 0.01 m2, within 0.01 of the 0 m2 threshold", Assert.Single(outcome.Warnings).Condition, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// "Zero metrado on a modelled element": a wall whose metrado is zero, or
+    /// less, is warned about, and its line is still written as measured.
+    /// </summary>
+    [Theory]
+    [InlineData(0.0, "Its metrado is 0 m2")]
+    [InlineData(-2.0, "Its metrado is -2 m2")]
+    public void AZeroOrNegativeMetradoIsWarnedAbout(double area, string phrase)
+    {
+        TakeoffPass.Outcome outcome = TakeoffPass.Run(CriteriaSet.Default, [Element("w-0", "Walls", "B2010", Area(area))], Chain);
+
+        Assert.Equal("w-0", Assert.Single(outcome.Lines).Element.UniqueId);
+        ValidationWarning warning = Assert.Single(outcome.Warnings, warning => warning.Condition.StartsWith(phrase, StringComparison.Ordinal));
+        Assert.Equal(("w-0", "Walls", "Walls family", "Walls type"), (warning.UniqueId, warning.CategoryName, warning.FamilyName, warning.TypeName));
+        Assert.EndsWith("so check its geometry; the line is written as measured.", warning.Condition, StringComparison.Ordinal);
+    }
+
+    /// <summary>A layer line with no area is named by its material, and the wall's other lines raise nothing.</summary>
+    [Fact]
+    public void AZeroLayerLineIsWarnedAboutByItsMaterial()
+    {
+        ElementTakeoff wall = Layered("w-4", wholeVolumeOver: 0);
+        wall = wall with
+        {
+            Quantities = [.. wall.Quantities.Select(q => q.SourceKey == LayerSources.MaterialArea && q.Material!.MaterialId == "plaster" ? new RawQuantity(q.SourceKey, new Quantity(0, QuantityUnit.SquareMetre), q.Material) : q)],
+        };
+
+        TakeoffPass.Outcome outcome = TakeoffPass.Run(LayeredWalls(), [wall], Chain);
+
+        Assert.Equal(2, outcome.Lines.Count);
+        Assert.StartsWith("Its Tarrajeo line measures 0 m2", Assert.Single(outcome.Warnings).Condition, StringComparison.Ordinal);
+    }
+
+    /// <summary>A count is one per instance, never zero: a counted element raises nothing.</summary>
+    [Fact]
+    public void ACountedElementIsNeverWarnedAboutAsZero()
+    {
+        Assert.Empty(TakeoffPass.Run(CriteriaSet.Default, [Element("d-1", "Doors", "C1020")], Chain).Warnings);
+    }
+
     /// <summary>A warning never stops the pass: the element beside a suspect one is still measured and coded.</summary>
     [Fact]
     public void ASuspectElementDoesNotStopThePass()

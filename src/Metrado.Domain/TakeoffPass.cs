@@ -12,9 +12,10 @@ namespace Metrado.Domain;
 /// <remarks>
 /// The conditions it raises: an element whose category has no criterion; a
 /// criterion none of whose sources had a value, or whose units disagree; an
-/// element whose openings exceed its gross quantity; a layered element whose
-/// materials do not account for it; an opening near the threshold; a layer
-/// measured as its category's material. The export composes this pass with
+/// element whose openings exceed its gross quantity; a line whose metrado is
+/// zero or negative; a layered element whose materials do not account for
+/// it; an opening near the threshold; a layer measured as its category's
+/// material. The export composes this pass with
 /// grouping and the run report, and the integration suite does the same, so
 /// both run the one composition.
 /// </remarks>
@@ -69,7 +70,9 @@ public static class TakeoffPass
             // warning above says why, and no line is invented for it.
             if (outcome is { Status: MetradoStatus.Measured or MetradoStatus.Counted, Result: MetradoResult result })
             {
-                lineas.Add(new Linea(element, chain.Resolve(element), result));
+                Linea line = new(element, chain.Resolve(element), result);
+                lineas.Add(line);
+                warnings.AddRange(Nothing(line));
 
                 // Only a measured host (wall, floor, roof) had its openings decided by the rule.
                 warnings.AddRange(NearThreshold(element, criterion.Threshold));
@@ -108,7 +111,9 @@ public static class TakeoffPass
             return false;
         }
 
-        lineas.AddRange(lines.Select(line => new Linea(element, chain.ResolveLayer(element, line.Layer.Material), line.Metrado, line.Layer)));
+        List<Linea> measured = [.. lines.Select(line => new Linea(element, chain.ResolveLayer(element, line.Layer.Material), line.Metrado, line.Layer))];
+        lineas.AddRange(measured);
+        warnings.AddRange(measured.SelectMany(Nothing));
 
         // Every element of a type has its layers, so the note is said once for the type.
         if (CategoryMaterialNote(element, lines) is ValidationWarning note && notedTypes.Add(element.TypeKey))
@@ -157,6 +162,31 @@ public static class TakeoffPass
                 string.Join(", ", borrowed.Select(entry => entry.Material).Distinct(StringComparer.Ordinal)),
                 borrowed.Count == 1 ? "it" : "each",
                 borrowed.Count == 1 ? "it is" : "each is"));
+    }
+
+    /// <summary>
+    /// A measured line of zero or less: a modelled element that measures
+    /// nothing is more likely a modelling fault than a real zero. Written as a
+    /// positive <c>&gt;</c> so a NaN is flagged too. A count, one per
+    /// instance, never is.
+    /// </summary>
+    private static IEnumerable<ValidationWarning> Nothing(Linea line)
+    {
+        Quantity metrado = line.Metrado.Metrado;
+        if (metrado.Value > 0)
+        {
+            yield break;
+        }
+
+        yield return ValidationWarning.ForElement(
+            line.Element,
+            string.Format(
+                CultureInfo.InvariantCulture,
+                "{0} {1:0.######} {2}: a modelled element that measures nothing, or less, is more likely a modelling fault than a real zero, "
+                    + "so check its geometry; the line is written as measured.",
+                line.Layer is MaterialLayers layer ? $"Its {layer.Material.MaterialName} line measures" : "Its metrado is",
+                metrado.Value,
+                metrado.Unit.Symbol()));
     }
 
     private static IEnumerable<ValidationWarning> NearThreshold(ElementTakeoff element, OpeningsThreshold threshold) =>
