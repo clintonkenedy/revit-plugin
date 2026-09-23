@@ -27,6 +27,7 @@ public sealed class HarnessReport
     public WallProbe.Result? Probe { get; set; }
     public AreaSettingsProbe.Result? AreaProbe { get; set; }
     public HostProbe.Result? HostProbe { get; set; }
+    public MaterialProbe.Result? MaterialProbe { get; set; }
     public string? Error { get; set; }
     public DateTime StartedUtc { get; set; } = DateTime.UtcNow;
     public DateTime? FinishedUtc { get; set; }
@@ -104,6 +105,15 @@ public sealed class HarnessApplication : IExternalApplication
                 {
                     Write("probing");
                     _report.Probe = WallProbe.Run(document, _request.MaxWalls);
+                    _report.ModifiedAfterCommand = document.IsModified;
+                    Finish(app, "done");
+                    return;
+                }
+
+                if (string.Equals(_request.Mode, "probe-materials", StringComparison.OrdinalIgnoreCase))
+                {
+                    Write("probing");
+                    _report.MaterialProbe = MaterialProbe.Run(document, _request.MaxWalls);
                     _report.ModifiedAfterCommand = document.IsModified;
                     Finish(app, "done");
                     return;
