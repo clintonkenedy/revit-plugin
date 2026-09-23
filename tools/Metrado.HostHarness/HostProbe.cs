@@ -26,7 +26,7 @@ public static class HostProbe
     public sealed record HostResult(
         string Category, string UniqueId, string TypeName, double? AreaM2, double TopFaceAreaM2, int TopFaces,
         List<LoopResult> Loops, List<CutterResult> Cutters, List<double?> SketchLoopsM2, List<string> Hidden,
-        List<string> Measured, List<string> Unmeasured);
+        List<string> Measured, List<string> Unmeasured, string? DesignOption);
 
     /// <param name="Outer">Counterclockwise about the face's normal: the face's outer boundary; otherwise a hole.</param>
     /// <param name="Generators">Elements other than the host generating the faces across the loop's edges.</param>
@@ -228,7 +228,8 @@ public static class HostProbe
             sketchLoops,
             hidden,
             [.. reading.Openings.Select(opening => $"{opening.UniqueId} {M2(opening.AreaSquareFeet):F4}")],
-            [.. reading.Unmeasured.Select(opening => $"{opening.UniqueId}: {opening.Reason}")]);
+            [.. reading.Unmeasured.Select(opening => $"{opening.UniqueId}: {opening.Reason}")],
+            host.DesignOption is { } option ? $"{option.Name} (primary: {option.IsPrimary})" : null);
     }
 
     /// <summary>The loop's orientation about the face's normal, and the area it encloses.</summary>
