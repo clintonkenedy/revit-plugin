@@ -34,6 +34,16 @@ public sealed class LayerCodificationTests
         Assert.Equal(UnclassifiedResolver.Code, CodificationChain.Standard(null).ResolveLayer(Host(), Material(null)));
     }
 
+    /// <summary>Nor the host's nominated shared parameter: the material's codes replace the host's, all of them.</summary>
+    [Fact]
+    public void TheHostsSharedParameterNeverCodesALayer()
+    {
+        ElementTakeoff host = Host() with { Codes = new CodificationReadings(null, null, new Dictionary<string, string?> { ["guid"] = "H-1" }) };
+
+        Assert.Equal("H-1", CodificationChain.Standard("guid").Resolve(host));
+        Assert.Equal(UnclassifiedResolver.Code, CodificationChain.Standard("guid").ResolveLayer(host, Material(null)));
+    }
+
     [Fact]
     public void ALineaCarriesTheLayerItMeasures()
     {
