@@ -21,7 +21,7 @@ public sealed class LayeredWallComposesIntoBudgetLinesTests
     [Fact]
     public void AThreeMaterialWallIsThreeBudgetLinesUnderOneUniqueId()
     {
-        using ExportRun run = ExportPipeline.Run(Resolved(), [LayeredWall("w-layered", wholeVolumeOver: 0)]);
+        using ExportRun run = ExportPipeline.Run(Resolved(), [ModelFixture.LayeredWall("w-layered", wholeVolumeOver: 0)]);
 
         Assert.Equal(
             [
@@ -38,7 +38,7 @@ public sealed class LayeredWallComposesIntoBudgetLinesTests
     [Fact]
     public void AWallWhoseMaterialsDoNotAddUpIsOneWholeLine()
     {
-        using ExportRun run = ExportPipeline.Run(Resolved(), [LayeredWall("w-whole", wholeVolumeOver: 0.01)]);
+        using ExportRun run = ExportPipeline.Run(Resolved(), [ModelFixture.LayeredWall("w-whole", wholeVolumeOver: 0.01)]);
 
         Assert.Empty(run.Budget.LayerLines());
         Assert.Equal(["w-whole"], run.Budget.ExportedIdentifiers());
@@ -51,44 +51,5 @@ public sealed class LayeredWallComposesIntoBudgetLinesTests
         Result<EffectiveCriteria, ConfigError> resolved = CriteriaResolver.Resolve(CriteriaFileLookup.Found(CriteriaText), "C:/model/metrado.criteria.json");
         Assert.True(resolved.IsOk, resolved.IsOk ? string.Empty : resolved.Error.Message);
         return resolved.Value;
-    }
-
-    private static ElementTakeoff LayeredWall(string uniqueId, double wholeVolumeOver)
-    {
-        (string Id, string Name, string Keynote, LayerFunction Function, double Width)[] materials =
-        [
-            ("tile", "Enchape", "02.05.01", LayerFunction.Finish1, 0.010),
-            ("brick", "Ladrillo", "02.01.01", LayerFunction.Structure, 0.130),
-            ("plaster", "Tarrajeo", "02.04.01", LayerFunction.Finish2, 0.015),
-        ];
-
-        List<RawQuantity> quantities = [new RawQuantity("HOST_AREA_COMPUTED", new Quantity(12.51, QuantityUnit.SquareMetre))];
-        foreach ((string id, string name, string keynote, _, double width) in materials)
-        {
-            MaterialRef material = new(id, name, new CodificationReadings(assemblyCode: null, keynote, new Dictionary<string, string?>()));
-            quantities.Add(new RawQuantity(LayerSources.MaterialVolume, new Quantity(Math.Round(12.51 * width, 9), QuantityUnit.CubicMetre), material));
-            quantities.Add(new RawQuantity(LayerSources.MaterialArea, new Quantity(12.51, QuantityUnit.SquareMetre), material));
-        }
-
-        quantities.Add(new RawQuantity(LayerSources.HostVolume, new Quantity(materials.Sum(material => Math.Round(12.51 * material.Width, 9)) + wholeVolumeOver, QuantityUnit.CubicMetre)));
-
-        return new ElementTakeoff(
-            UniqueId: uniqueId,
-            CategoryName: "Walls",
-            FamilyName: "Basic Wall",
-            TypeName: "Tiled brick",
-            TypeKey: "t-1",
-            Codes: new CodificationReadings("B2010", keynote: null, sharedParameters: new Dictionary<string, string?>()),
-            Quantities: quantities,
-            Openings:
-            [
-                new OpeningQuantity("window", new Quantity(0.60, QuantityUnit.SquareMetre)),
-                new OpeningQuantity("door", new Quantity(1.89, QuantityUnit.SquareMetre)),
-            ])
-        {
-            Layers = new LayerStructure(
-                [.. materials.Select((material, position) => new CompoundLayer(position, material.Function, new Quantity(material.Width, QuantityUnit.Metre), material.Id))],
-                []),
-        };
     }
 }

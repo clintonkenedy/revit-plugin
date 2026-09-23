@@ -78,6 +78,51 @@ internal static class ModelFixture
         new(Uncoded, AssemblyCode: null, RawArea: 20.0, Openings: []),
     ];
 
+    /// <summary>
+    /// A layered wall: 12.51 m2 of 10 mm tile, 130 mm brick and 15 mm plaster,
+    /// each material keyed, with a 0.60 m2 window and a 1.89 m2 door;
+    /// <paramref name="wholeVolumeOver"/> above zero keeps its materials from
+    /// reconciling, so it is measured whole.
+    /// </summary>
+    internal static ElementTakeoff LayeredWall(string uniqueId, double wholeVolumeOver)
+    {
+        (string Id, string Name, string Keynote, LayerFunction Function, double Width)[] materials =
+        [
+            ("tile", "Enchape", "02.05.01", LayerFunction.Finish1, 0.010),
+            ("brick", "Ladrillo", "02.01.01", LayerFunction.Structure, 0.130),
+            ("plaster", "Tarrajeo", "02.04.01", LayerFunction.Finish2, 0.015),
+        ];
+
+        List<RawQuantity> quantities = [new RawQuantity("HOST_AREA_COMPUTED", new Quantity(12.51, QuantityUnit.SquareMetre))];
+        foreach ((string id, string name, string keynote, _, double width) in materials)
+        {
+            MaterialRef material = new(id, name, new CodificationReadings(assemblyCode: null, keynote, new Dictionary<string, string?>()));
+            quantities.Add(new RawQuantity(LayerSources.MaterialVolume, new Quantity(Math.Round(12.51 * width, 9), QuantityUnit.CubicMetre), material));
+            quantities.Add(new RawQuantity(LayerSources.MaterialArea, new Quantity(12.51, QuantityUnit.SquareMetre), material));
+        }
+
+        quantities.Add(new RawQuantity(LayerSources.HostVolume, new Quantity(materials.Sum(material => Math.Round(12.51 * material.Width, 9)) + wholeVolumeOver, QuantityUnit.CubicMetre)));
+
+        return new ElementTakeoff(
+            UniqueId: uniqueId,
+            CategoryName: "Walls",
+            FamilyName: "Basic Wall",
+            TypeName: "Tiled brick",
+            TypeKey: "t-1",
+            Codes: new CodificationReadings("B2010", keynote: null, sharedParameters: new Dictionary<string, string?>()),
+            Quantities: quantities,
+            Openings:
+            [
+                new OpeningQuantity("window", new Quantity(0.60, QuantityUnit.SquareMetre)),
+                new OpeningQuantity("door", new Quantity(1.89, QuantityUnit.SquareMetre)),
+            ])
+        {
+            Layers = new LayerStructure(
+                [.. materials.Select((material, position) => new CompoundLayer(position, material.Function, new Quantity(material.Width, QuantityUnit.Metre), material.Id))],
+                []),
+        };
+    }
+
     /// <summary>The model, as extraction would hand it over.</summary>
     internal static IReadOnlyList<ElementTakeoff> Walls =>
         [.. Specification.Select(ToTakeoff)];
