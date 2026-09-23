@@ -102,8 +102,9 @@ public sealed record RunReport(
     /// <para>
     /// One entry per capitulo and unit: a partida whose lines came in two units
     /// is split by grouping, which reports it, and each unit's lines carry their
-    /// own convention. Layer lines in m2 and m3 give a capitulo two entries with
-    /// no split, each in its own partida.
+    /// own convention. Layer lines in m2 and m3 give a capitulo two entries:
+    /// in two partidas where their materials are coded apart, or as a split
+    /// partida, reported, where they share a code, unclassified among them.
     /// </para>
     /// </remarks>
     /// <exception cref="InvalidOperationException">

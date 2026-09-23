@@ -49,9 +49,14 @@ public static class LayerMeasurement
             return Fault(whole, sum, volumes.Count, LayerFault.UnitMismatch, "a volume must be in m3 and an area in m2");
         }
 
+        // A fault names a material as Revit's UI does: its id is a UniqueId nobody can look up.
+        Dictionary<string, string> names = volumes.Concat(areas)
+            .GroupBy(quantity => quantity.Material!.MaterialId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First().Material!.MaterialName, StringComparer.Ordinal);
+
         if ((Repeated(volumes) ?? Repeated(areas)) is string repeated)
         {
-            return Fault(whole, sum, volumes.Count, LayerFault.DuplicateMaterial, repeated);
+            return Fault(whole, sum, volumes.Count, LayerFault.DuplicateMaterial, names[repeated]);
         }
 
         HashSet<string> measured = [.. volumes.Select(volume => volume.Material!.MaterialId)];
@@ -68,7 +73,7 @@ public static class LayerMeasurement
 
         if (measured.Concat(areaMeasured).FirstOrDefault(id => !measured.Contains(id) || !areaMeasured.Contains(id)) is string half)
         {
-            return Fault(whole, sum, volumes.Count, LayerFault.NonFiniteOrNegative, half);
+            return Fault(whole, sum, volumes.Count, LayerFault.NonFiniteOrNegative, names[half]);
         }
 
         // A membrane too: it has no volume to miss, but its area is what prices it.
@@ -79,7 +84,7 @@ public static class LayerMeasurement
 
         if (measured.FirstOrDefault(id => !structure.Layers.Any(layer => layer.MaterialId == id)) is string stray)
         {
-            return Fault(whole, sum, volumes.Count, LayerFault.UnattributedMaterial, stray);
+            return Fault(whole, sum, volumes.Count, LayerFault.UnattributedMaterial, names[stray]);
         }
 
         if (structure.Layers.FirstOrDefault(layer => layer.MaterialId is not null && measured.Contains(layer.MaterialId) && layer.Function is null) is CompoundLayer unnamed)
@@ -192,7 +197,7 @@ public static class LayerMeasurement
         double area = addedBack.Sum(opening => opening.Amount.Value);
         string openings = string.Format(
             CultureInfo.InvariantCulture,
-            "The openings the threshold adds back to this element ({0}, {1:0.###} m2 in all) are not returned to its layer lines",
+            "The openings the threshold adds back to this element ({0}, {1:0.######} m2 in all) are not returned to its layer lines",
             string.Join(", ", addedBack.Select(opening => opening.UniqueId)),
             area);
 
@@ -203,7 +208,7 @@ public static class LayerMeasurement
                 ? $"{openings} {string.Join(", ", kept.Select(layer => layer.Material.MaterialName))}: {string.Join("; ", conditions.Select(Why))}, "
                     + "so how much each layer lost to them cannot be told from its width. Each of those lines keeps Revit's deduction of them, whatever it was."
                 : $"{openings} in m3, since a share of volume is not exact: each keeps Revit's deduction of them, about their area times its layers' width ("
-                    + string.Join(", ", kept.Select(layer => string.Format(CultureInfo.InvariantCulture, "{0} {1:0.###} m3", layer.Material.MaterialName, area * layer.Width.Value)))
+                    + string.Join(", ", kept.Select(layer => string.Format(CultureInfo.InvariantCulture, "{0} {1:0.######} m3", layer.Material.MaterialName, area * layer.Width.Value)))
                     + ").");
     }
 

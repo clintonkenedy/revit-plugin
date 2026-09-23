@@ -106,6 +106,18 @@ public sealed class LayerMeasurementTests
             Assert.Single(warnings).Condition);
     }
 
+    /// <summary>A pipe sleeve's amount is stated, not rounded away: the openings added back are the small ones.</summary>
+    [Fact]
+    public void ASmallOpeningsAmountIsStatedToTheCubicCentimetre()
+    {
+        ElementTakeoff wall = Wall(openings: [new OpeningQuantity("sleeve", new Quantity(0.0004, QuantityUnit.SquareMetre))]);
+
+        string warning = Assert.Single(ByLayer(wall, Walls(Structure(QuantityUnit.CubicMetre))).Warnings).Condition;
+
+        Assert.Contains("(sleeve, 0.0004 m2 in all)", warning, StringComparison.Ordinal);
+        Assert.EndsWith("(Material brick 0.000052 m3).", warning, StringComparison.Ordinal);
+    }
+
     /// <summary>Each m3 line is given its own amount, by its own layers' summed width.</summary>
     [Fact]
     public void EachM3LineIsToldItsOwnAmount()

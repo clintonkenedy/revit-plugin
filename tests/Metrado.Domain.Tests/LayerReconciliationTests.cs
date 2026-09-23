@@ -96,6 +96,27 @@ public sealed class LayerReconciliationTests
         Assert.Equal(fault, reconciliation.Fault);
     }
 
+    /// <summary>A fault about one material names it as Revit's UI does, never by its UniqueId.</summary>
+    [Theory]
+    [InlineData("a material read twice", "material Tile, enchape was read twice")]
+    [InlineData("a material with no area", "a volume or area of Tile, enchape could not be read")]
+    [InlineData("a material on no layer", "material Paint, latex, which Revit measures in the element, is on none of its layers")]
+    public void AFaultNamesItsMaterialByName(string what, string phrase)
+    {
+        List<RawQuantity> quantities = what switch
+        {
+            "a material read twice" => [.. WallQuantities(), Volume("tile", 0.0)],
+            "a material with no area" => [.. WallQuantities().Where(q => !(q.SourceKey == LayerSources.MaterialArea && q.Material!.MaterialId == "tile"))],
+            _ => [.. WallQuantities(), Volume("paint", 0.0), Area("paint", 1.0)],
+        };
+        Dictionary<string, string> names = new() { ["tile"] = "Tile, enchape", ["brick"] = "Brick", ["plaster"] = "Plaster", ["paint"] = "Paint, latex" };
+        ElementTakeoff wall = Wall([.. quantities.Select(q => q.Material is MaterialRef m ? new RawQuantity(q.SourceKey, q.Amount, new MaterialRef(m.MaterialId, names[m.MaterialId])) : q)]);
+
+        string warning = LayerMeasurement.Reconcile(wall).WarningFor(wall)!.Condition;
+
+        Assert.Contains(phrase, warning, StringComparison.Ordinal);
+    }
+
     /// <summary>A cubic centimetre, fixed: the seam's rounding is a thousandth of that, the smallest real material three thousand times it.</summary>
     [Theory]
     [InlineData(1.93905 + 0.9e-6, true)]

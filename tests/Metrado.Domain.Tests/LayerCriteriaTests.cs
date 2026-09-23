@@ -118,6 +118,19 @@ public sealed class LayerCriteriaTests
         Assert.Null(off.ByCategory["Walls"].Layers);
     }
 
+    /// <summary>The three hosts, and only they, are taken off by layer when a file asks.</summary>
+    [Theory]
+    [InlineData("Walls")]
+    [InlineData("Floors")]
+    [InlineData("Roofs")]
+    public void EachHostCanBeTakenOffByLayer(string category)
+    {
+        CriteriaSet layered = Merge(CriteriaSet.Default, new CategoryOverride(category, layers: LayerOverride.On(new Dictionary<LayerFunction, QuantityUnit>())));
+
+        Assert.Equal(LayerCriterion.Default, layered.ByCategory[category].Layers);
+        Assert.Equal(["Floors", "Roofs", "Walls"], CategoryCriterion.LayeredCategories.Order(StringComparer.Ordinal));
+    }
+
     /// <summary>An entry that says nothing of layers keeps what it inherits, layered or not.</summary>
     [Fact]
     public void AnEntryNotMentioningLayersInheritsThem()
