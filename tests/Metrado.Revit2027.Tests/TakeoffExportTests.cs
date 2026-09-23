@@ -56,14 +56,14 @@ public sealed class TakeoffExportTests
     [Fact]
     public void AnElementOfACategoryWithNoCriterionIsReportedNotMeasured()
     {
-        ElementTakeoff floor = Wall("f1", "B1010", area: 30.0) with { CategoryName = "Floors" };
+        ElementTakeoff ceiling = Wall("c1", "C3030", area: 30.0) with { CategoryName = "Ceilings" };
 
-        TakeoffExport.Outcome outcome = TakeoffExport.Run(Defaults(), [floor], []);
+        TakeoffExport.Outcome outcome = TakeoffExport.Run(Defaults(), [ceiling], []);
 
         Assert.Equal(0, outcome.Report.ExportedLines);
         ValidationWarning warning = Assert.Single(outcome.Report.Warnings);
-        Assert.Equal("f1", warning.UniqueId);
-        Assert.Contains("Floors", warning.Condition);
+        Assert.Equal("c1", warning.UniqueId);
+        Assert.Contains("Ceilings", warning.Condition);
     }
 
     /// <summary>

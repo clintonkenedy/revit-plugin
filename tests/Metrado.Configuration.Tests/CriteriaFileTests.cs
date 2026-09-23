@@ -151,7 +151,7 @@ public sealed class CriteriaFileTests
 
         Assert.Equal("Walls", error.Category);
         Assert.Equal("ft2", error.InvalidValue);
-        Assert.Contains("m2, m3, u", error.Message);
+        Assert.Contains("Accepted units: m2, m3, u, m.", error.Message);
         Assert.Equal(new ConfigLocation(1, 22), error.Location);
     }
 

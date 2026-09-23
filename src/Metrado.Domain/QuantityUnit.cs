@@ -18,6 +18,9 @@ public enum QuantityUnit
 
     /// <summary>Count of instances, written <c>u</c> (unidad).</summary>
     Each = 3,
+
+    /// <summary>Length, written <c>m</c>: the linear metre ("ml") a metrado states railings in.</summary>
+    Metre = 4,
 }
 
 /// <summary>
@@ -34,6 +37,7 @@ public static class QuantityUnitExtensions
         QuantityUnit.SquareMetre => "m2",
         QuantityUnit.CubicMetre => "m3",
         QuantityUnit.Each => "u",
+        QuantityUnit.Metre => "m",
         _ => throw new ArgumentOutOfRangeException(
             nameof(unit), unit, "Not a declared quantity unit."),
     };

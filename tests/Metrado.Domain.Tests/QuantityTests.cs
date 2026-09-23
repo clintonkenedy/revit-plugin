@@ -8,15 +8,17 @@ namespace Metrado.Domain.Tests;
 /// </summary>
 public sealed class QuantityTests
 {
+    /// <summary>The linear metre joined in task 2.2, for railings; a new unit is a decision, never a slip.</summary>
     [Fact]
-    public void QuantityUnitIsAClosedSetOfExactlyThreeValues()
+    public void QuantityUnitIsAClosedSetOfExactlyFourValues()
     {
         QuantityUnit[] declared = Enum.GetValues<QuantityUnit>();
 
-        Assert.Equal(3, declared.Length);
+        Assert.Equal(4, declared.Length);
         Assert.Contains(QuantityUnit.SquareMetre, declared);
         Assert.Contains(QuantityUnit.CubicMetre, declared);
         Assert.Contains(QuantityUnit.Each, declared);
+        Assert.Contains(QuantityUnit.Metre, declared);
     }
 
     [Theory]

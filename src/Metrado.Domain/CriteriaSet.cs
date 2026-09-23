@@ -20,17 +20,19 @@ namespace Metrado.Domain;
 /// </remarks>
 public sealed record CriteriaSet
 {
+    // Areas for the hosts openings cut; linear metres for railings, as a
+    // metrado states them; a count for doors and windows, which read no
+    // quantity source (the empty list, N1). Nothing is added back where
+    // there are no openings, so those thresholds are zero.
     private static readonly CriteriaSet BuiltIn = new(
         new Dictionary<string, CategoryCriterion>(StringComparer.Ordinal)
         {
-            ["Walls"] = new CategoryCriterion(
-                category: "Walls",
-                unit: QuantityUnit.SquareMetre,
-                sources: ["HOST_AREA_COMPUTED"],
-                threshold: BuiltInThreshold(
-                    Defaults.AreaThresholdSquareMetres,
-                    QuantityUnit.SquareMetre,
-                    "Walls")),
+            ["Walls"] = BuiltInCriterion("Walls", QuantityUnit.SquareMetre, ["HOST_AREA_COMPUTED"], Defaults.AreaThresholdSquareMetres),
+            ["Floors"] = BuiltInCriterion("Floors", QuantityUnit.SquareMetre, ["HOST_AREA_COMPUTED"], Defaults.AreaThresholdSquareMetres),
+            ["Roofs"] = BuiltInCriterion("Roofs", QuantityUnit.SquareMetre, ["HOST_AREA_COMPUTED"], Defaults.AreaThresholdSquareMetres),
+            ["Railings"] = BuiltInCriterion("Railings", QuantityUnit.Metre, ["CURVE_ELEM_LENGTH"], 0),
+            ["Doors"] = BuiltInCriterion("Doors", QuantityUnit.Each, [], 0),
+            ["Windows"] = BuiltInCriterion("Windows", QuantityUnit.Each, [], 0),
         });
 
     public CriteriaSet(IReadOnlyDictionary<string, CategoryCriterion> byCategory)
@@ -46,9 +48,9 @@ public sealed record CriteriaSet
     /// <remarks>
     /// <c>takeoff-configuration</c>, requirement "Usable Defaults Without Any
     /// Configuration": the add-in ships these and runs correctly with no file, and
-    /// that absence is not an error. I1 defines one category — Walls, measured as
-    /// area in m² with the openings correction applied. Task 2.2 extends the table
-    /// to six.
+    /// that absence is not an error. They cover the six categories extraction
+    /// reads (task 2.2): walls, floors and roofs by area in m² with the openings
+    /// correction, railings by length in m, doors and windows counted in u.
     /// </remarks>
     public static CriteriaSet Default => BuiltIn;
 
@@ -220,7 +222,7 @@ public sealed record CriteriaSet
         new ConfigError(message) { Category = category, InvalidValue = invalidValue };
 
     /// <summary>
-    /// Builds a threshold that is part of the product rather than of a file.
+    /// Builds a criterion that is part of the product rather than of a file.
     /// </summary>
     /// <remarks>
     /// Goes through <see cref="OpeningsThreshold.TryCreate"/> like every other
@@ -228,17 +230,18 @@ public sealed record CriteriaSet
     /// have rejected from a user. If they ever were, the add-in must not start with
     /// them: a default nobody can fix is worse than a loud failure at load.
     /// </remarks>
-    private static OpeningsThreshold BuiltInThreshold(
-        double value,
+    private static CategoryCriterion BuiltInCriterion(
+        string category,
         QuantityUnit unit,
-        string category)
+        IReadOnlyList<string> sources,
+        double threshold)
     {
-        Result<OpeningsThreshold, ConfigError> threshold =
-            OpeningsThreshold.TryCreate(value, unit, Defaults.Mode, category);
+        Result<OpeningsThreshold, ConfigError> built =
+            OpeningsThreshold.TryCreate(threshold, unit, Defaults.Mode, category);
 
-        return threshold.IsOk
-            ? threshold.Value
+        return built.IsOk
+            ? new CategoryCriterion(category, unit, sources, built.Value)
             : throw new InvalidOperationException(
-                $"The built-in criterion for {category} is invalid: {threshold.Error.Message}");
+                $"The built-in criterion for {category} is invalid: {built.Error.Message}");
     }
 }
