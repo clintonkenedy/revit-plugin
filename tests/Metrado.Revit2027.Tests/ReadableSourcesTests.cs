@@ -24,6 +24,8 @@ public sealed class ReadableSourcesTests
         { new CategoryOverride("Windows", QuantityUnit.SquareMetre, ["HOST_AREA_COMPUTED"]), ["Windows", "HOST_AREA_COMPUTED", "counted"] },
         { new CategoryOverride("Walls", QuantityUnit.CubicMetre, ["HOST_VOLUME_COMPUTED"]), ["Walls", "HOST_VOLUME_COMPUTED", "reads HOST_AREA_COMPUTED"] },
         { new CategoryOverride("Railings", sources: ["X", "CURVE_ELEM_LENGTH"]), ["Railings", "from X,", "reads CURVE_ELEM_LENGTH"] },
+        { new CategoryOverride("Floors", QuantityUnit.CubicMetre, ["HOST_VOLUME_COMPUTED"]), ["Floors", "HOST_VOLUME_COMPUTED", "reads HOST_AREA_COMPUTED"] },
+        { new CategoryOverride("Roofs", QuantityUnit.CubicMetre, ["HOST_VOLUME_COMPUTED"]), ["Roofs", "HOST_VOLUME_COMPUTED", "reads HOST_AREA_COMPUTED"] },
     };
 
     [Theory]
@@ -48,7 +50,10 @@ public sealed class ReadableSourcesTests
     [Fact]
     public void ACategoryExtractionDoesNotReadIsNotJudged()
     {
-        Assert.Null(ReadableSources.Check(Criteria(new CategoryOverride("Floors", sources: ["ANYTHING"]))));
+        CategoryCriterion walls = CriteriaSet.Default.ByCategory["Walls"];
+        CategoryCriterion ceilings = new("Ceilings", walls.Unit, ["ANYTHING"], walls.Threshold);
+
+        Assert.Null(ReadableSources.Check(new CriteriaSet(new Dictionary<string, CategoryCriterion> { ["Ceilings"] = ceilings })));
     }
 
     /// <summary>A set without a category extraction reads is judged on the categories it has.</summary>
