@@ -113,6 +113,27 @@ public sealed class ExportFilesTests : IDisposable
         Assert.Empty(Files());
     }
 
+    /// <summary>
+    /// The system's reason names the temporary file, which the estimator
+    /// never asked for and will not find. The explanation names the workbook.
+    /// </summary>
+    [Fact]
+    public void AFailureIsExplainedUnderTheWorkbooksNameNotTheTemporaryOne()
+    {
+        UnauthorizedAccessException refusal;
+        using (Acl.Deny(_project.FullName, FileSystemRights.CreateFiles))
+        {
+            refusal = Assert.Throws<UnauthorizedAccessException>(() => ExportFiles.Reserve(Workbook));
+        }
+
+        string explained = ExportFiles.Explain(Workbook, refusal);
+
+        Assert.Contains("~metrado-", refusal.Message);
+        Assert.StartsWith($"No workbook was written to {_project.FullName}. ", explained);
+        Assert.Contains(Workbook, explained);
+        Assert.DoesNotContain("~metrado-", explained);
+    }
+
     [Fact]
     public void AFolderThatIsGoneFailsAtTheReservation()
     {

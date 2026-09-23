@@ -65,7 +65,7 @@ public sealed class ExportTakeoffCommand : IExternalCommand
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            string failure = $"No workbook was written to {Path.GetDirectoryName(workbook)}. {ex.Message}";
+            string failure = ExportFiles.Explain(workbook, ex);
             commandData.Application.Application.WriteJournalComment($"Metrado: {failure}", true);
             TaskDialog.Show(Title, failure);
             return Result.Cancelled;

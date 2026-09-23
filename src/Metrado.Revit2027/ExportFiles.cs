@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace Metrado.Revit2027;
 
 /// <summary>
@@ -8,7 +10,7 @@ namespace Metrado.Revit2027;
 /// half-written or replaced copy would cost them that work. An export
 /// abandoned before its commit leaves nothing behind. Uses no Revit type.
 /// </summary>
-public sealed class ExportFiles : IDisposable
+public sealed partial class ExportFiles : IDisposable
 {
     private readonly string _workbookPath;
     private readonly string _workbookTemp;
@@ -97,11 +99,27 @@ public sealed class ExportFiles : IDisposable
     }
 
     /// <summary>
+    /// What the estimator is told when the files could not be written. The
+    /// system's reason names the temporary file, which they never asked for
+    /// and will not find; it is told under the workbook's name instead.
+    /// </summary>
+    public static string Explain(string workbookPath, Exception failure)
+    {
+        ArgumentNullException.ThrowIfNull(failure);
+
+        string reason = Temporary().Replace(failure.Message, Path.GetFileName(workbookPath));
+        return $"No workbook was written to {Path.GetDirectoryName(workbookPath)}. {reason}";
+    }
+
+    /// <summary>
     /// A temporary name no export gives and no estimator opens by mistake: the
     /// same folder, so the commit is a rename, never a copy across volumes.
     /// </summary>
     private static string TemporaryBeside(string workbookPath) =>
         Path.Combine(Path.GetDirectoryName(workbookPath)!, $"~metrado-{Guid.NewGuid():N}.partial");
+
+    [GeneratedRegex(@"~metrado-[0-9a-f]{32}\.partial")]
+    private static partial Regex Temporary();
 
     /// <summary>
     /// Cleanup runs while a failure is already on its way to the estimator;
