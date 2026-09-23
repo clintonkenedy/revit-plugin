@@ -28,7 +28,7 @@ public sealed class ExportTakeoffCommand : IExternalCommand
             return Result.Cancelled;
         }
 
-        ModelLocation location = ModelLocation.Of(document.PathName, CentralPath(document), document.IsModelInCloud);
+        ModelLocation location = ModelLocation.Of(document.PathName, document.IsModelInCloud);
         if (location.Refusal is not null)
         {
             TaskDialog.Show(Title, location.Refusal);
@@ -79,21 +79,6 @@ public sealed class ExportTakeoffCommand : IExternalCommand
         };
         dialog.Show();
         return Result.Succeeded;
-    }
-
-    /// <summary>
-    /// The central model's path for a workshared local copy; null otherwise.
-    /// A detached model has left its central behind and is worked on its own.
-    /// </summary>
-    private static string? CentralPath(Document document)
-    {
-        if (!document.IsWorkshared || document.IsDetached)
-        {
-            return null;
-        }
-
-        ModelPath? central = document.GetWorksharingCentralModelPath();
-        return central is null || central.Empty ? null : ModelPathUtils.ConvertModelPathToUserVisiblePath(central);
     }
 
     /// <summary>The journal keeps what the dialog showed, and why each opening was reported.</summary>
