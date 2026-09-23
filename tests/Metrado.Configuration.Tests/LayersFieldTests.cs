@@ -34,6 +34,21 @@ public sealed class LayersFieldTests
         Assert.Equal("on: Finish1=m2, Structure=m3", Layers("""{ "Floors": { "layers": { "Structure": "m3", "Finish1": "m2" } } }"""));
     }
 
+    /// <summary>Every function is stated as Revit names it, in m2 or m3; a membrane only in m2.</summary>
+    [Theory]
+    [InlineData("Structure", "m3")]
+    [InlineData("Substrate", "m3")]
+    [InlineData("Insulation", "m3")]
+    [InlineData("Finish1", "m3")]
+    [InlineData("Finish2", "m3")]
+    [InlineData("StructuralDeck", "m3")]
+    [InlineData("Membrane", "m2")]
+    [InlineData("StructuralDeck", "m2")]
+    public void EveryFunctionIsStatedInTheUnitsItAllows(string function, string unit)
+    {
+        Assert.Equal($"on: {function}={unit}", Layers($$"""{ "Floors": { "layers": { "{{function}}": "{{unit}}" } } }"""));
+    }
+
     [Fact]
     public void LeftOutTheCategoryInherits()
     {
@@ -52,7 +67,22 @@ public sealed class LayersFieldTests
         { """{ "Walls": { "layers": null } }""", "null", "true, false or an object" },
         { """{ "Walls": { "layers": [] } }""", "[]", "true, false or an object" },
         { """{ "Walls": { "layers": true, "layers": false } }""", "\"layers\": false", "stated twice" },
+        { """{ "Walls": { "layers": { "structure": "m2" } } }""", "\"structure\"", "is not a layer function" },
+        { """{ "Walls": { "layers": { "Structure": "M3" } } }""", "\"M3\"", "m2 or m3" },
     };
+
+    /// <summary>A list or an object is quoted whole, as it was written, never by its bracket alone.</summary>
+    [Theory]
+    [InlineData("""{ "Walls": { "layers": [1, 2] } }""", "[1, 2]")]
+    [InlineData("""{ "Walls": { "layers": { "Structure": ["m2"] } } }""", "[\"m2\"]")]
+    [InlineData("""{ "Walls": { "layers": { "Structure": { "unit": "m2" } } } }""", "{ \"unit\": \"m2\" }")]
+    public void AListOrObjectIsQuotedWhole(string text, string written)
+    {
+        Result<IReadOnlyList<LocatedOverride>, ConfigError> parsed = CriteriaFile.Parse(text);
+
+        Assert.False(parsed.IsOk);
+        Assert.Equal(written, parsed.Error.InvalidValue);
+    }
 
     [Theory]
     [MemberData(nameof(Refused))]
@@ -80,8 +110,22 @@ public sealed class LayersFieldTests
         Result<EffectiveCriteria, ConfigError> resolved = CriteriaResolver.Resolve(CriteriaFileLookup.Found(text), "C:/model/metrado.criteria.json");
 
         Assert.False(resolved.IsOk);
-        Assert.Contains("'Doors'", resolved.Error.Message, StringComparison.Ordinal);
-        Assert.Contains("line 3", resolved.Error.Message, StringComparison.Ordinal);
+        Assert.Equal(
+            "The criteria file 'C:/model/metrado.criteria.json', line 3, position 3: 'Doors' cannot be taken off by material layer: only walls, floors and roofs have layers.",
+            resolved.Error.Message);
+    }
+
+    /// <summary>A railing stated in m2 has no layers either, and is refused at its entry, where it was once let through.</summary>
+    [Fact]
+    public void LayersOnARailingInSquareMetresAreRefusedAtItsEntry()
+    {
+        Result<EffectiveCriteria, ConfigError> resolved = CriteriaResolver.Resolve(
+            CriteriaFileLookup.Found("""{ "Railings": { "unit": "m2", "layers": {} } }"""), "C:/model/metrado.criteria.json");
+
+        Assert.False(resolved.IsOk);
+        Assert.Equal(
+            "The criteria file 'C:/model/metrado.criteria.json', line 1, position 3: 'Railings' cannot be taken off by material layer: only walls, floors and roofs have layers.",
+            resolved.Error.Message);
     }
 
     private static LocatedOverride Single(string text)

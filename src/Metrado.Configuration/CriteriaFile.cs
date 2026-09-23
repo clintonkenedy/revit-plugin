@@ -328,10 +328,26 @@ public static class CriteriaFile
     }
 
     /// <summary>The value as the file wrote it, for naming it in a refusal.</summary>
-    private static string Written(ref Utf8JsonReader reader, byte[] utf8) =>
-        reader.TokenType == JsonTokenType.String
-            ? reader.GetString()!
-            : Encoding.UTF8.GetString(utf8, (int)reader.TokenStartIndex, reader.ValueSpan.Length);
+    /// <summary>
+    /// The value as written: a string unquoted, a list or an object whole,
+    /// read on a copy so the caller's reader stays where it was.
+    /// </summary>
+    private static string Written(ref Utf8JsonReader reader, byte[] utf8)
+    {
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            return reader.GetString()!;
+        }
+
+        if (reader.TokenType is JsonTokenType.StartArray or JsonTokenType.StartObject)
+        {
+            Utf8JsonReader container = reader;
+            container.Skip();
+            return Encoding.UTF8.GetString(utf8, (int)reader.TokenStartIndex, (int)(container.BytesConsumed - reader.TokenStartIndex));
+        }
+
+        return Encoding.UTF8.GetString(utf8, (int)reader.TokenStartIndex, reader.ValueSpan.Length);
+    }
 
     /// <summary>
     /// The 1-based line and character position of a byte offset, as an editor
