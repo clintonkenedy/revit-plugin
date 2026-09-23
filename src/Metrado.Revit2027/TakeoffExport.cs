@@ -59,9 +59,10 @@ public static class TakeoffExport
             if (outcome is { Status: MetradoStatus.Measured, Result: MetradoResult result })
             {
                 lineas.Add(new Linea(element, chain.Resolve(element), result));
-            }
 
-            warnings.AddRange(NearThreshold(element, criterion.Threshold));
+                // Only a measured wall had its openings decided by the rule.
+                warnings.AddRange(NearThreshold(element, criterion.Threshold));
+            }
         }
 
         TakeoffResult grouped = TakeoffResult.Group(lineas);
@@ -74,9 +75,17 @@ public static class TakeoffExport
                 && Math.Abs(opening.Amount.Value - threshold.Value) <= ThresholdBandSquareMetres)
             .Select(opening => ValidationWarning.ForElement(
                 element,
+                // The value in full: rounded, 0.99997 and 1.0 both read "1",
+                // yet the rule decides them oppositely.
                 string.Format(
                     CultureInfo.InvariantCulture,
-                    "Opening {0} measures {1:0.####} {2}, within {3} of the {4} threshold. Its area is measured by its "
-                    + "outline, which can be off by that much, so check whether it should be deducted.",
-                    opening.UniqueId, opening.Amount.Value, threshold.Unit.Symbol(), ThresholdBandSquareMetres, threshold.Value)));
+                    "Opening {0} measures {1:0.#########} {2}, within {3} of the {4} {2} threshold ({5}), and the rule {6}. "
+                    + "Its area is measured by its outline, which can be off by that much, so check it is on the right side.",
+                    opening.UniqueId,
+                    opening.Amount.Value,
+                    threshold.Unit.Symbol(),
+                    ThresholdBandSquareMetres,
+                    threshold.Value,
+                    threshold.Mode == BoundaryMode.Inclusive ? "inclusive" : "exclusive",
+                    Measurement.IsAddedBack(opening.Amount, threshold) ? "added it back" : "kept it deducted")));
 }

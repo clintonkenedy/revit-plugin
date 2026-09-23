@@ -91,6 +91,54 @@ public sealed class TakeoffExportTests
         Assert.Equal(metrado, outcome.Result.Partidas[0].Total.Value, precision: 9);
     }
 
+    /// <summary>
+    /// The review's case: 0.99997 and 1.0 both used to print as "1 m2", yet
+    /// the rule adds the first back and keeps the second deducted. The
+    /// warning now gives the value in full and says which way the rule went.
+    /// </summary>
+    [Theory]
+    [InlineData(BoundaryMode.Exclusive, 0.99997, "0.99997", "added it back")]
+    [InlineData(BoundaryMode.Exclusive, 1.0, "measures 1 m2", "kept it deducted")]
+    [InlineData(BoundaryMode.Inclusive, 1.00004, "1.00004", "kept it deducted")]
+    [InlineData(BoundaryMode.Inclusive, 1.0, "measures 1 m2", "added it back")]
+    public void TheBandWarningStatesTheValueAndTheRulesDecision(BoundaryMode mode, double opening, string value, string decision)
+    {
+        EffectiveCriteria criteria = new(
+            CriteriaSet.Merge(CriteriaSet.Default, [new CategoryOverride("Walls", mode: mode)]).Value,
+            ConfigSource.File,
+            @"C:\Projects\Office\metrado.criteria.json");
+
+        TakeoffExport.Outcome outcome = TakeoffExport.Run(criteria, [Wall("w1", "B2010", area: 18.0, openings: [("window", opening)])], []);
+
+        ValidationWarning band = Assert.Single(outcome.Report.Warnings, warning => warning.Condition.Contains("window"));
+        Assert.Contains(value, band.Condition);
+        Assert.Contains(decision, band.Condition);
+    }
+
+    /// <summary>A wall the rule never measured decided nothing about its openings.</summary>
+    [Fact]
+    public void AnUnmeasuredWallRaisesNoBandWarning()
+    {
+        TakeoffExport.Outcome outcome = TakeoffExport.Run(
+            Defaults(), [Wall("no-area", "B2010", area: null, openings: [("window", 0.999)])], []);
+
+        Assert.DoesNotContain(outcome.Report.Warnings, warning => warning.Condition.Contains("window"));
+    }
+
+    /// <summary>
+    /// The criteria in force govern the metrado, not the built-in ones: under
+    /// a 2.0 m2 threshold a 1.5 m2 opening is added back, where the defaults
+    /// would have kept it deducted.
+    /// </summary>
+    [Fact]
+    public void TheSuppliedCriteriaGovernTheMetrado()
+    {
+        TakeoffExport.Outcome outcome = TakeoffExport.Run(
+            Supplied(threshold: 2.0), [Wall("w1", "B2010", area: 18.0, openings: [("window", 1.5)])], []);
+
+        Assert.Equal(19.5, outcome.Result.Partidas[0].Total.Value, precision: 9);
+    }
+
     /// <summary>The band surrounds the threshold in force, not the built-in one.</summary>
     [Fact]
     public void TheBandFollowsTheSuppliedThreshold()
