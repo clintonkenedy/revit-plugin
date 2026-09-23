@@ -129,11 +129,15 @@ Converted quantities are rounded to 1e-9 m2 at the seam, so the feet round trip'
          ▼ ElementTakeoff[]                     EffectiveCriteria ◄─────┘
     Metrado.Domain
       CodificationChain: AssemblyCode → Keynote → Shared → Rule → Unclassified
-      Measure = SelectSource (first with a value) ─► Apply(element, raw, openings[], threshold)
+      TakeoffPass (3.3), per element: its criterion ─► whole: SelectSource ─► Apply
+                                          └► by layer: LayerMeasurement ─► a line per material
+                  ─► code each line ─► validation warnings, each naming its element
          ▼
       TakeoffResult (capitulo → partida → linea, warnings) + RunReport
          ├──────────────────────────► Metrado.Excel ── ClosedXML ──► .xlsx
          └─► TaskDialog (counts, effective config, warnings) ─► user, workbook not needed
+
+**The validation pass (task 3.3, PR 33).** `TakeoffPass` in Domain measures every element under its category's criterion, whole or by its materials, codes each line and raises the run's warnings, each naming its element by UniqueId, category, family and type: no criterion for the category; no value from any source, or units that disagree; openings past the gross quantity; a line whose metrado is zero or negative; a layered element whose materials do not account for it; an opening near the threshold; a layer measured as its category's material. A warning never stops it. The command's `TakeoffExport` and the integration suite's pipeline both run it, so the tests measure with the shipped composition; what stays test-side is grouping, the run report and the writer. On Revit 2027.2 the pass writes the same workbooks as PR 32 on both samples, whole and layered, and raises the same warnings but three: the Snowdon wall with no computed area has its three materials at 0 m2, and each of its layer lines is now warned about.
 
 ## File Changes
 
