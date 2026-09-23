@@ -27,6 +27,30 @@ public sealed class HostTakeoffTests
             "The category key does not name a built-in criterion, so no wall would ever be measured.");
     }
 
+    /// <summary>Floors and roofs share the reading, each under the key its own criterion is known by.</summary>
+    [Theory]
+    [InlineData("Floors")]
+    [InlineData("Roofs")]
+    public void AFloorOrRoofKeepsItsOwnCategoryKey(string key)
+    {
+        ElementTakeoff takeoff = HostTakeoff.From(Reading() with { CategoryKey = key }, Doubled);
+
+        Assert.Equal(key, takeoff.CategoryName);
+        Assert.Contains(Assert.Single(takeoff.Quantities).SourceKey, CriteriaSet.Default.ByCategory[key].Sources);
+    }
+
+    /// <summary>A warning says what was cut, so a floor's is not read as a wall's.</summary>
+    [Theory]
+    [InlineData("Walls", "cuts this wall")]
+    [InlineData("Floors", "cuts this floor")]
+    [InlineData("Roofs", "cuts this roof")]
+    public void AWarningNamesWhatTheOpeningCuts(string key, string phrase)
+    {
+        HostReading reading = Reading(unmeasured: [new UnmeasuredOpening("shaft", "no hole")]) with { CategoryKey = key };
+
+        Assert.Contains(phrase, Assert.Single(HostTakeoff.Warnings(HostTakeoff.From(reading, Doubled), reading)).Condition);
+    }
+
     [Fact]
     public void TheComputedAreaIsTheOnlyQuantityConvertedOnceInSquareMetres()
     {
@@ -225,6 +249,7 @@ public sealed class HostTakeoffTests
         IReadOnlyList<UnmeasuredOpening>? unmeasured = null) =>
         new(
             UniqueId: "wall-unique-id",
+            CategoryKey: "Walls",
             FamilyName: "Basic Wall",
             TypeName: "Generic - 200mm",
             TypeUniqueId: "type-unique-id",

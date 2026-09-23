@@ -102,7 +102,7 @@ public sealed class ElementTakeoffsTests
     [Fact]
     public void AWallsKeynoteReachesItsTakeoff()
     {
-        HostReading wall = new("w-1", "Basic Wall", "Generic - 200mm", "t-4", AssemblyCode: null, 100.0, [], [], Keynote: "04 21 00.A1");
+        HostReading wall = new("w-1", "Walls", "Basic Wall", "Generic - 200mm", "t-4", AssemblyCode: null, 100.0, [], [], Keynote: "04 21 00.A1");
 
         Assert.Equal("04 21 00.A1", HostTakeoff.From(wall, squareFeet => squareFeet).Codes.Keynote);
     }
@@ -110,7 +110,7 @@ public sealed class ElementTakeoffsTests
     [Fact]
     public void AWallsSharedParameterReachesItsTakeoff()
     {
-        HostReading wall = new("w-1", "Basic Wall", "Generic - 200mm", "t-4", AssemblyCode: null, 100.0, [], [],
+        HostReading wall = new("w-1", "Walls", "Basic Wall", "Generic - 200mm", "t-4", AssemblyCode: null, 100.0, [], [],
             SharedParameters: new Dictionary<string, string?> { ["guid-1"] = "S-10" });
 
         Assert.Equal("S-10", HostTakeoff.From(wall, squareFeet => squareFeet).Codes.SharedParameters["guid-1"]);

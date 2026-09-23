@@ -57,6 +57,7 @@ public static class WallReader
 
         return new HostReading(
             UniqueId: wall.UniqueId,
+            CategoryKey: HostTakeoff.WallsKey,
             FamilyName: NonBlank(type.FamilyName, type.Kind.ToString()),
             TypeName: NonBlank(type.Name, "(unnamed type)"),
             TypeUniqueId: type.UniqueId,

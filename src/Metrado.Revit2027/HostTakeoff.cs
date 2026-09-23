@@ -3,15 +3,17 @@ using Metrado.Domain;
 namespace Metrado.Revit2027;
 
 /// <summary>
-/// One wall as read from the model, in Revit's internal units (square feet),
-/// before any conversion. Holds no Revit type, so the step from reading to
+/// One host — a wall, a floor or a roof — as read from the model, in Revit's
+/// internal units (square feet), before any conversion. Holds no Revit type, so the step from reading to
 /// <see cref="ElementTakeoff"/> can be proved without Revit running.
 /// </summary>
-/// <param name="ComputedAreaSquareFeet">Null when the wall carries no readable, finite computed area.</param>
+/// <param name="CategoryKey">The key the criteria know the category by, never Revit's localized name.</param>
+/// <param name="ComputedAreaSquareFeet">Null when the host carries no readable, finite computed area.</param>
 /// <param name="Openings">Openings measured individually.</param>
 /// <param name="Unmeasured">Openings Revit subtracted whose own area could not be measured.</param>
 public sealed record HostReading(
     string UniqueId,
+    string CategoryKey,
     string FamilyName,
     string TypeName,
     string TypeUniqueId,
@@ -22,10 +24,10 @@ public sealed record HostReading(
     string? Keynote = null,
     IReadOnlyDictionary<string, string?>? SharedParameters = null);
 
-/// <summary>One opening Revit subtracted from a wall, read on its own and never summed.</summary>
+/// <summary>One opening Revit subtracted from a host, read on its own and never summed.</summary>
 public sealed record OpeningReading(string UniqueId, double AreaSquareFeet);
 
-/// <summary>An opening that cuts the wall but whose area could not be measured, and why.</summary>
+/// <summary>An opening that cuts the host but whose area could not be measured, and why.</summary>
 public sealed record UnmeasuredOpening(string UniqueId, string Reason);
 
 /// <summary>
@@ -38,12 +40,16 @@ public static class HostTakeoff
     /// localizes ("Muros" under a Spanish UI) and which would then match no
     /// criterion, leaving every wall unmeasured.
     /// </summary>
-    public const string CategoryKey = "Walls";
+    public const string WallsKey = "Walls";
 
-    /// <summary>The source the built-in Walls criterion reads.</summary>
+    public const string FloorsKey = "Floors";
+
+    public const string RoofsKey = "Roofs";
+
+    /// <summary>The source the built-in Walls, Floors and Roofs criteria read.</summary>
     public const string ComputedAreaSource = "HOST_AREA_COMPUTED";
 
-    /// <param name="reading">The wall as read, in square feet.</param>
+    /// <param name="reading">The host as read, in square feet.</param>
     /// <param name="squareFeetToSquareMetres">
     /// Inside Revit, <c>UnitUtils.ConvertFromInternalUnits</c> to square metres.
     /// Injected rather than written here as a factor, so the conversion stays
@@ -62,7 +68,7 @@ public static class HostTakeoff
 
         return new ElementTakeoff(
             UniqueId: reading.UniqueId,
-            CategoryName: CategoryKey,
+            CategoryName: reading.CategoryKey,
             FamilyName: reading.FamilyName,
             TypeName: reading.TypeName,
             TypeKey: reading.TypeUniqueId,
@@ -71,7 +77,7 @@ public static class HostTakeoff
                 reading.Keynote,
                 sharedParameters: reading.SharedParameters ?? new Dictionary<string, string?>()),
             // No quantity rather than zero: the domain then reports that no
-            // source had a value, instead of pricing the wall at nothing.
+            // source had a value, instead of pricing the host at nothing.
             Quantities: reading.ComputedAreaSquareFeet is double area
                 ? [new RawQuantity(ComputedAreaSource, SquareMetres(area))]
                 : [],
@@ -80,7 +86,7 @@ public static class HostTakeoff
     }
 
     /// <summary>
-    /// One warning per opening that cuts the wall but could not be measured.
+    /// One warning per opening that cuts the host but could not be measured.
     /// Such an opening is left out of <see cref="ElementTakeoff.Openings"/>, so
     /// Revit's deduction of it stands and it is never added back; the warning
     /// is what keeps that from being silent.
@@ -92,7 +98,15 @@ public static class HostTakeoff
 
         return [.. reading.Unmeasured.Select(opening => ValidationWarning.ForElement(
             takeoff,
-            $"Opening {opening.UniqueId} cuts this wall but its area could not be measured ({opening.Reason}). "
+            $"Opening {opening.UniqueId} cuts this {Noun(reading.CategoryKey)} but its area could not be measured ({opening.Reason}). "
             + "Revit's deduction of it is kept, so it is never added back, even below the threshold."))];
     }
+
+    private static string Noun(string categoryKey) => categoryKey switch
+    {
+        WallsKey => "wall",
+        FloorsKey => "floor",
+        RoofsKey => "roof",
+        _ => "element",
+    };
 }
