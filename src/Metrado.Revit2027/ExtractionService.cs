@@ -37,6 +37,8 @@ public static class ExtractionService
             reasons.AddRange(reading.Unmeasured.Select(opening => opening.Reason));
         }
 
+        warnings.AddRange(SurfaceReader.Unread(document));
+
         // Railings, doors and windows: no openings, but a railing a stair repeats is warned about.
         foreach (ElementReading reading in OtherElementReader.ReadAll(document, sharedParameter))
         {

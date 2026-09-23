@@ -102,6 +102,16 @@ public static class HostTakeoff
             + "Revit's deduction of it is kept, so it is never added back, even below the threshold."))];
     }
 
+    /// <summary>
+    /// A floor or roof modelled in place: a family instance with no computed
+    /// area, which this increment does not measure. The warning is what keeps
+    /// its absence from the budget from being silent.
+    /// </summary>
+    public static ValidationWarning NotRead(string uniqueId, string categoryKey, string familyName, string typeName) =>
+        new(uniqueId, categoryKey, familyName, typeName,
+            $"This in-place {Noun(categoryKey)} is a family instance with no computed area, which Metrado does not measure: "
+            + $"it is in no line of the budget. Measure it by hand, or model it as a {Noun(categoryKey)}.");
+
     private static string Noun(string categoryKey) => categoryKey switch
     {
         WallsKey => "wall",

@@ -51,6 +51,19 @@ public sealed class HostTakeoffTests
         Assert.Contains(phrase, Assert.Single(HostTakeoff.Warnings(HostTakeoff.From(reading, Doubled), reading)).Condition);
     }
 
+    /// <summary>An in-place floor or roof is not measured, and the warning names it so its absence is not silent.</summary>
+    [Theory]
+    [InlineData("Floors", "in-place floor")]
+    [InlineData("Roofs", "in-place roof")]
+    public void AnInPlaceHostIsNamedAsNotMeasured(string key, string phrase)
+    {
+        ValidationWarning warning = HostTakeoff.NotRead("f-1", key, "Terrace slab", "Tiled 60mm");
+
+        Assert.Equal(("f-1", key, "Terrace slab", "Tiled 60mm"), (warning.UniqueId, warning.CategoryName, warning.FamilyName, warning.TypeName));
+        Assert.Contains(phrase, warning.Condition, StringComparison.Ordinal);
+        Assert.Contains("no line of the budget", warning.Condition, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void TheComputedAreaIsTheOnlyQuantityConvertedOnceInSquareMetres()
     {

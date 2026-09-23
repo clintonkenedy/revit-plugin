@@ -1,5 +1,6 @@
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.IFC;
+using Metrado.Domain;
 using RevitApplicationException = Autodesk.Revit.Exceptions.ApplicationException;
 
 namespace Metrado.Revit2027;
@@ -32,6 +33,25 @@ public static class SurfaceReader
             .WhereElementIsNotElementType()
             .OfType<HostObject>()
             .Where(host => host.DesignOption is not { IsPrimary: false });
+
+    /// <summary>One warning per in-place floor or roof, primary design option or none, which no reading measures.</summary>
+    public static IReadOnlyList<ValidationWarning> Unread(Document document) =>
+    [
+        .. InPlace(document, BuiltInCategory.OST_Floors, HostTakeoff.FloorsKey),
+        .. InPlace(document, BuiltInCategory.OST_Roofs, HostTakeoff.RoofsKey),
+    ];
+
+    private static IEnumerable<ValidationWarning> InPlace(Document document, BuiltInCategory category, string key) =>
+        new FilteredElementCollector(document)
+            .OfCategory(category)
+            .WhereElementIsNotElementType()
+            .OfType<FamilyInstance>()
+            .Where(instance => instance.DesignOption is not { IsPrimary: false } && instance.SuperComponent is null)
+            .Select(instance => HostTakeoff.NotRead(
+                instance.UniqueId,
+                key,
+                instance.Symbol?.FamilyName is { Length: > 0 } family ? family : key,
+                instance.Name is { Length: > 0 } name ? name : "(unnamed type)"));
 
     public static HostReading Read(Document document, HostObject host, string categoryKey, Guid? sharedParameter = null)
     {
