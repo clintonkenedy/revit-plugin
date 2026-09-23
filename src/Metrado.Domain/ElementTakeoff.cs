@@ -12,6 +12,10 @@ namespace Metrado.Domain;
 /// </param>
 /// <param name="Quantities">Revit-computed amounts, openings already subtracted.</param>
 /// <param name="Openings">Individual openings, never pre-aggregated.</param>
+/// <param name="Layers">
+/// The type's layers, read only for a category taken off by material layer
+/// (I3); null otherwise, never an empty structure.
+/// </param>
 /// <remarks>
 /// <c>UniqueId</c> and the two lists are validated on construction and on the
 /// <c>with</c> copy path, because <c>with</c> copies backing state directly and a
@@ -25,7 +29,8 @@ public sealed record ElementTakeoff(
     string TypeKey,
     CodificationReadings Codes,
     IReadOnlyList<RawQuantity> Quantities,
-    IReadOnlyList<OpeningQuantity> Openings)
+    IReadOnlyList<OpeningQuantity> Openings,
+    LayerStructure? Layers = null)
 {
     private readonly string _uniqueId = Guard.RequiredText(UniqueId, nameof(UniqueId));
 
