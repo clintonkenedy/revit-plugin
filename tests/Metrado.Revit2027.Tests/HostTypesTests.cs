@@ -43,22 +43,33 @@ public sealed class HostTypesTests
 
     /// <summary>
     /// The read-only requirement at the one place Revit enforces it: a command
-    /// declared <c>ReadOnly</c> cannot open a write transaction at all.
+    /// declared <c>ReadOnly</c> cannot open a write transaction at all. Every
+    /// command in the add-in is checked, not one named here: the add-in never
+    /// writes to the document, so no command it ships may be able to, and a
+    /// button rewired to a new command cannot slip past a check of the old one.
     /// </summary>
     [Fact]
-    public void TheExportCommandDeclaresAReadOnlyTransaction()
+    public void EveryExternalCommandInTheAddInDeclaresAReadOnlyTransaction()
     {
         using MetadataLoadContext context = OpenContext();
 
-        Type command = AddInType(context, ExportCommandClassName);
-        CustomAttributeData transaction = Assert.Single(
-            command.GetCustomAttributesData(),
-            attribute => attribute.AttributeType.FullName == "Autodesk.Revit.Attributes.TransactionAttribute");
-
         Type mode = context.LoadFromAssemblyName("RevitAPI").GetType("Autodesk.Revit.Attributes.TransactionMode", throwOnError: true)!;
         object readOnly = mode.GetField("ReadOnly")!.GetRawConstantValue()!;
+        Type[] commands = [.. context.LoadFromAssemblyName(AddInAssemblyName).GetTypes()
+            .Where(type => type.GetInterfaces().Any(contract => contract.FullName == "Autodesk.Revit.UI.IExternalCommand"))];
 
-        Assert.Equal(readOnly, Assert.Single(transaction.ConstructorArguments).Value);
+        Assert.Contains(commands, command => command.FullName == ExportCommandClassName);
+
+        foreach (Type command in commands)
+        {
+            CustomAttributeData? transaction = command.GetCustomAttributesData()
+                .SingleOrDefault(attribute => attribute.AttributeType.FullName == "Autodesk.Revit.Attributes.TransactionAttribute");
+
+            Assert.True(transaction is not null, $"{command.FullName} declares no Transaction attribute.");
+            Assert.True(
+                readOnly.Equals(Assert.Single(transaction.ConstructorArguments).Value),
+                $"{command.FullName} is not declared TransactionMode.ReadOnly.");
+        }
     }
 
     private static void AssertConstructibleByRevit(Type type)
