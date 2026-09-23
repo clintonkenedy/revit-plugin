@@ -7,7 +7,8 @@ namespace Metrado.HostHarness;
 
 /// <summary>
 /// What one unattended run is asked to do. Read from the file METRADO_HARNESS names.
-/// Mode "command" posts <see cref="CommandId"/>; mode "probe-walls" runs <see cref="WallProbe"/> instead.
+/// Mode "command" posts <see cref="CommandId"/>; mode "probe-walls" runs <see cref="WallProbe"/> instead,
+/// and mode "probe-area-settings" runs <see cref="AreaSettingsProbe"/>.
 /// </summary>
 public sealed record HarnessRequest(
     string CommandId, string ReportPath, int SettleIdlings = 5, string Mode = "command", int MaxWalls = 30);
@@ -24,6 +25,7 @@ public sealed class HarnessReport
     public bool CommandPosted { get; set; }
     public List<HarnessDialog> Dialogs { get; } = [];
     public WallProbe.Result? Probe { get; set; }
+    public AreaSettingsProbe.Result? AreaProbe { get; set; }
     public string? Error { get; set; }
     public DateTime StartedUtc { get; set; } = DateTime.UtcNow;
     public DateTime? FinishedUtc { get; set; }
@@ -101,6 +103,15 @@ public sealed class HarnessApplication : IExternalApplication
                 {
                     Write("probing");
                     _report.Probe = WallProbe.Run(document, _request.MaxWalls);
+                    _report.ModifiedAfterCommand = document.IsModified;
+                    Finish(app, "done");
+                    return;
+                }
+
+                if (string.Equals(_request.Mode, "probe-area-settings", StringComparison.OrdinalIgnoreCase))
+                {
+                    Write("probing");
+                    _report.AreaProbe = AreaSettingsProbe.Run(document);
                     _report.ModifiedAfterCommand = document.IsModified;
                     Finish(app, "done");
                     return;

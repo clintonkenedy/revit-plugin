@@ -17,14 +17,21 @@ param(
     [Parameter(Mandatory)] [string] $Model,
     [string] $CommandId = 'CustomCtrl_%CustomCtrl_%Add-Ins%Metrado%ExportTakeoffCommand',
     [string] $ReportPath = (Join-Path ([IO.Path]::GetTempPath()) "metrado-harness-$([guid]::NewGuid()).json"),
-    [ValidateSet('command', 'probe-walls')] [string] $Mode = 'command',
+    [ValidateSet('command', 'probe-walls', 'probe-area-settings')] [string] $Mode = 'command',
     [int] $MaxWalls = 30,
     [int] $TimeoutSeconds = 600,
     [string] $RevitExe = 'D:\autodesk\producto\Revit 2027\Revit.exe',
+    # Adds the smoke run's button (METRADO_SMOKE=1, for this Revit only) and posts it.
+    [switch] $Smoke,
+    # A Revit UI language code such as ESP; Revit's own language when empty.
+    [string] $Language,
     [string] $AddinsRoot = (Join-Path $env:APPDATA 'Autodesk\Revit\Addins\2027')
 )
 
 $ErrorActionPreference = 'Stop'
+if ($Smoke -and -not $PSBoundParameters.ContainsKey('CommandId')) {
+    $CommandId = 'CustomCtrl_%CustomCtrl_%Add-Ins%Metrado%SmokeCommand'
+}
 
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, WindowsBase
 Add-Type -Namespace MetradoHarness -Name Mouse -MemberDefinition @'
@@ -34,22 +41,35 @@ Add-Type -Namespace MetradoHarness -Name Mouse -MemberDefinition @'
 [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
 '@
 
+# Revit 2027's own wording for the prompt, English and Spanish (es-ES
+# UIFrameworkRes, TaskDialog_Security_Unsigned_File_Loading), so a run under
+# a Spanish UI is answered too.
+$UnsignedPrompt = @{
+    Title   = @('Security - Unsigned Add-In', 'Seguridad - Complemento sin firma')
+    Name    = '(Name|Nombre)'
+    Owner   = '(Publisher|Fabricante):'
+    LoadOnce = @('Load Once', 'Cargar una vez')
+}
+
 function Confirm-OwnUnsignedAddIn {
     $A = [System.Windows.Automation.AutomationElement]
     $scope = [System.Windows.Automation.TreeScope]::Descendants
-    $prompt = $A::RootElement.FindFirst($scope,
-        [System.Windows.Automation.PropertyCondition]::new($A::NameProperty, 'Security - Unsigned Add-In'))
+    $prompt = $UnsignedPrompt.Title | ForEach-Object {
+        $A::RootElement.FindFirst($scope, [System.Windows.Automation.PropertyCondition]::new($A::NameProperty, $_))
+    } | Where-Object { $_ } | Select-Object -First 1
     if (-not $prompt) { return }
 
     $text = ($prompt.FindAll($scope, [System.Windows.Automation.PropertyCondition]::new(
         $A::ControlTypeProperty, [System.Windows.Automation.ControlType]::Text)) |
         ForEach-Object { $_.Current.Name }) -join ' '
-    if ($text -notmatch '(?m)^Name:[ \t]+(Metrado|Metrado host harness \(development only\))[ \t]*\r?$') { return }
+    if ($text -notmatch "(?m)^$($UnsignedPrompt.Name):[ \t]+(Metrado|Metrado host harness \(development only\))[ \t]*\r?$") { return }
 
     # The command links expose no UI Automation pattern; a click is the only
     # way in. It lands only if the prompt is in front and the point under the
     # cursor is the button itself — otherwise nothing is clicked this round.
-    $button = $prompt.FindFirst($scope, [System.Windows.Automation.PropertyCondition]::new($A::NameProperty, 'Load Once'))
+    $button = $UnsignedPrompt.LoadOnce | ForEach-Object {
+        $prompt.FindFirst($scope, [System.Windows.Automation.PropertyCondition]::new($A::NameProperty, $_))
+    } | Where-Object { $_ } | Select-Object -First 1
     if (-not $button) { return }
     $handle = [IntPtr]$prompt.Current.NativeWindowHandle
     [MetradoHarness.Mouse]::SetForegroundWindow($handle) | Out-Null
@@ -58,12 +78,12 @@ function Confirm-OwnUnsignedAddIn {
 
     $r = $button.Current.BoundingRectangle
     $point = [System.Windows.Point]::new($r.X + $r.Width / 2, $r.Y + $r.Height / 2)
-    if ($A::FromPoint($point).Current.Name -ne 'Load Once') { return }
+    if ($A::FromPoint($point).Current.Name -ne $button.Current.Name) { return }
 
     [MetradoHarness.Mouse]::SetCursorPos([int]$point.X, [int]$point.Y) | Out-Null
     [MetradoHarness.Mouse]::mouse_event(0x02, 0, 0, 0, [UIntPtr]::Zero)
     [MetradoHarness.Mouse]::mouse_event(0x04, 0, 0, 0, [UIntPtr]::Zero)
-    Write-Host "Answered Load Once for: $(($text -split 'Publisher:')[0].Trim())"
+    Write-Host "Answered $($button.Current.Name) for: $(($text -split $UnsignedPrompt.Owner)[0].Trim())"
 }
 
 if (Get-Process -Name Revit -ErrorAction SilentlyContinue) {
@@ -88,8 +108,12 @@ try {
     Remove-Item $ReportPath -ErrorAction SilentlyContinue
 
     $env:METRADO_HARNESS = $request
-    $revit = Start-Process $RevitExe -ArgumentList "`"$Model`"" -PassThru
+    if ($Smoke) { $env:METRADO_SMOKE = '1' }
+    $arguments = @("`"$Model`"")
+    if ($Language) { $arguments += "/language $Language" }
+    $revit = Start-Process $RevitExe -ArgumentList $arguments -PassThru
     Remove-Item Env:METRADO_HARNESS
+    Remove-Item Env:METRADO_SMOKE -ErrorAction SilentlyContinue
 
     # Every rebuilt binary is unsigned and new to Revit, so it asks before
     # loading it — before any add-in can answer. Only a prompt naming Metrado
@@ -113,6 +137,7 @@ finally {
     # The manifest goes first and unconditionally: without it the harness
     # never loads again, even if its folder is still held open.
     Remove-Item Env:METRADO_HARNESS -ErrorAction SilentlyContinue
+    Remove-Item Env:METRADO_SMOKE -ErrorAction SilentlyContinue
     Remove-Item $manifest -Force -ErrorAction SilentlyContinue
     Remove-Item $request -Force -ErrorAction SilentlyContinue
     if ($revit -and -not $revit.HasExited) {
