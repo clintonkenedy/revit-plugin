@@ -42,6 +42,21 @@ public sealed class HostTypesTests
     }
 
     /// <summary>
+    /// The button names its availability class by type, and Revit constructs
+    /// it by name: it must exist, be constructible and implement the interface.
+    /// </summary>
+    [Fact]
+    public void TheAvailabilityClassIsOneRevitCanConstruct()
+    {
+        using MetadataLoadContext context = OpenContext();
+
+        Type availability = AddInType(context, "Metrado.Revit2027.CommandAvailability");
+
+        AssertConstructibleByRevit(availability);
+        Assert.Contains(availability.GetInterfaces(), type => type.FullName == "Autodesk.Revit.UI.IExternalCommandAvailability");
+    }
+
+    /// <summary>
     /// The read-only requirement at the one place Revit enforces it: a command
     /// declared <c>ReadOnly</c> cannot open a write transaction at all. Every
     /// command in the add-in is checked, not one named here: the add-in never

@@ -45,10 +45,12 @@ public sealed class ReadOnlyTripwireTests
 
     /// <summary>
     /// Setters that configure something other than the model: how geometry is
-    /// read (<c>Options</c>) and how the ribbon button is described at startup
-    /// (<c>ItemData</c>, the base of <c>PushButtonData</c>).
+    /// read (<c>Options</c>), how the ribbon button is described at startup
+    /// (<c>ItemData</c> and <c>PushButtonData</c>), and what a dialog says
+    /// (<c>TaskDialog</c>).
     /// </summary>
-    private static readonly string[] HarmlessSetterTypes = ["Autodesk.Revit.DB.Options", "Autodesk.Revit.UI.ItemData"];
+    private static readonly string[] HarmlessSetterTypes =
+        ["Autodesk.Revit.DB.Options", "Autodesk.Revit.UI.ItemData", "Autodesk.Revit.UI.PushButtonData", "Autodesk.Revit.UI.TaskDialog"];
 
     /// <summary>Every Revit API member the add-in uses, each reviewed as reading, configuring a read, or UI.</summary>
     private static readonly string[] ReviewedReadOnly =
@@ -63,6 +65,8 @@ public sealed class ReadOnlyTripwireTests
         "Autodesk.Revit.DB.Curve.Tessellate",
         "Autodesk.Revit.DB.DesignOption.get_IsPrimary",
         "Autodesk.Revit.DB.Document.GetElement",
+        "Autodesk.Revit.DB.Document.get_IsFamilyDocument",
+        "Autodesk.Revit.DB.Document.get_PathName",
         "Autodesk.Revit.DB.Edge.Tessellate",
         "Autodesk.Revit.DB.Face.GetEdgesAsCurveLoops",
         "Autodesk.Revit.DB.Element.GetGeneratingElementIds",
@@ -118,8 +122,13 @@ public sealed class ReadOnlyTripwireTests
         "Autodesk.Revit.UI.ExternalCommandData.get_Application",
         "Autodesk.Revit.UI.ItemData.set_ToolTip",
         "Autodesk.Revit.UI.PushButtonData..ctor",
+        "Autodesk.Revit.UI.PushButtonData.set_AvailabilityClassName",
         "Autodesk.Revit.UI.RibbonPanel.AddItem",
         "Autodesk.Revit.UI.TaskDialog.Show",
+        "Autodesk.Revit.UI.TaskDialog..ctor",
+        "Autodesk.Revit.UI.TaskDialog.set_ExpandedContent",
+        "Autodesk.Revit.UI.TaskDialog.set_MainContent",
+        "Autodesk.Revit.UI.TaskDialog.set_MainInstruction",
         "Autodesk.Revit.UI.UIApplication.get_ActiveUIDocument",
         "Autodesk.Revit.UI.UIApplication.get_Application",
         "Autodesk.Revit.UI.UIControlledApplication.CreateRibbonPanel",

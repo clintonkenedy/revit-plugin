@@ -29,7 +29,8 @@ public sealed class MetradoApplication : IExternalApplication
             typeof(ExportTakeoffCommand).Assembly.Location,
             typeof(ExportTakeoffCommand).FullName)
         {
-            ToolTip = "Export the model's partidas and metrado to an Excel workbook.",
+            ToolTip = "Export the model's partidas and metrado to an Excel workbook beside the model.",
+            AvailabilityClassName = typeof(CommandAvailability).FullName,
         });
 
         return Result.Succeeded;
