@@ -16,7 +16,7 @@ public sealed class SharedParameterResolver : ICodeResolver
 {
     private readonly string _parameterName;
 
-    /// <param name="parameterName">The nominated shared parameter, by the name the readings carry it under.</param>
+    /// <param name="parameterName">The nominated shared parameter, by the key the readings carry it under: its GUID, "D" format.</param>
     public SharedParameterResolver(string parameterName)
     {
         _parameterName = Guard.RequiredText(parameterName, nameof(parameterName));

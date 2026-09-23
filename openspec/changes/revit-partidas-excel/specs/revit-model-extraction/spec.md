@@ -50,7 +50,7 @@ Only the Revit-facing assembly SHALL reference the Revit API. It MUST emit, per 
 
 **Increment**: I1
 
-Parameters SHALL be resolved by `BuiltInParameter` or `ForgeTypeId`. The add-in MUST NOT look up any parameter by its user-visible display name. The codification parameter for Revit 2027 is `BuiltInParameter.ASSEMBLY_CODE`.
+Parameters SHALL be resolved by `BuiltInParameter` or `ForgeTypeId`; the user-nominated shared parameter, which has neither, SHALL be resolved by its GUID. The add-in MUST NOT look up any parameter by its user-visible display name. The codification parameter for Revit 2027 is `BuiltInParameter.ASSEMBLY_CODE`.
 
 #### Scenario: Localised Revit UI does not change extraction
 

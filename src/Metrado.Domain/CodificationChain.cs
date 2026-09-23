@@ -35,7 +35,11 @@ public sealed class CodificationChain
     /// absent entry; so is the shared-parameter link when no parameter is
     /// nominated, so no shared value is ever read by accident.
     /// </summary>
-    /// <param name="sharedParameter">The nominated shared parameter's name, or null when none is nominated.</param>
+    /// <param name="sharedParameter">
+    /// The key the readings carry the nominated shared parameter's value under
+    /// (the adapter keys it by the parameter's GUID, "D" format), or null when
+    /// none is nominated.
+    /// </param>
     public static CodificationChain Standard(string? sharedParameter) =>
         new(sharedParameter is null
             ? [new AssemblyCodeResolver(), new KeynoteResolver(), new UnclassifiedResolver()]
