@@ -40,6 +40,8 @@ Absence is never an error; a supplied file is never ignored:
 
 `Merge` is per-category then per-field coalesce: a category absent from the file keeps its default entirely; a present category inherits every field left `null` — threshold, mode, unit and sources alike. Unknown category names are rejected before merging, so a typo fails loudly instead of being ignored.
 
+**Where the files live (decided by the user, PR 17).** The criteria file is `metrado.criteria.json` **beside the model**, so criteria are versioned and shared with the project they price. The workbook is written **beside the model too, and never over an existing file**: `<model> - metrado <yyyy-MM-dd HHmm>.xlsx`, with `(2)`, `(3)` on a clash and `FileMode.CreateNew` against a race, because estimators fill unit prices into the exported copy. A model never saved, or a cloud model, has no folder for either: the export asks for it to be saved and writes nothing.
+
 ## Opening Measurement (decided in PR 16, on host evidence)
 
 **The constraint.** The rule compares each opening's own quantity, so the adapter must say how much area Revit subtracted for each insert. No read-only Revit API returns that (Autodesk KB, Dec 2025: "Currently it is not possible to extract the opening areas of a calculated area from walls in Revit"). The exact method — delete the insert, regenerate, read, roll back — needs a transaction, which `TransactionMode.ReadOnly` forbids. Every measured opening is therefore an **outline standing in for the deduction**.
