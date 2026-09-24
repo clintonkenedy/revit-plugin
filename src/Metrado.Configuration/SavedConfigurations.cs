@@ -10,7 +10,15 @@ namespace Metrado.Configuration;
 /// included, and the codification setting, the shared parameter the chain
 /// reads third.
 /// </summary>
-public sealed record SavedConfiguration(string Name, CriteriaSet Criteria, Guid? SharedParameter);
+/// <exception cref="ArgumentException">A blank name, which the file's header could not carry back.</exception>
+public sealed record SavedConfiguration(string Name, CriteriaSet Criteria, Guid? SharedParameter)
+{
+    public string Name { get; init; } = !string.IsNullOrWhiteSpace(Name)
+        ? Name
+        : throw new ArgumentException("A saved configuration is named, and a blank name could not be read back.", nameof(Name));
+
+    public CriteriaSet Criteria { get; init; } = Criteria ?? throw new ArgumentNullException(nameof(Criteria));
+}
 
 /// <summary>
 /// Writes a configuration as a criteria file that names itself, and reads one

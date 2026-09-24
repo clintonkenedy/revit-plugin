@@ -39,28 +39,29 @@ public sealed class ConfigurationHeaderTests
         Assert.Single(content.Entries);
     }
 
-    public static TheoryData<string, string, string> Refused() => new()
+    public static TheoryData<string, string, string, string?> Refused() => new()
     {
-        { """{ "$configuration": "Obra" }""", "\"Obra\"", "must be an object" },
-        { """{ "$configuration": { "sharedParameter": null } }""", "\"$configuration\"", "has no \"name\"" },
-        { """{ "$configuration": { "name": "  " } }""", "\"  \"", "must be a text naming" },
-        { """{ "$configuration": { "name": 3 } }""", "3 }", "must be a text naming" },
-        { """{ "$configuration": { "name": "A", "sharedParameter": "shared" } }""", "\"shared\"", "the shared parameter's GUID" },
-        { """{ "$configuration": { "name": "A", "sharedParameter": 7 } }""", "7 }", "the shared parameter's GUID" },
-        { """{ "$configuration": { "name": "A", "owner": "B" } }""", "\"owner\"", "is not a field of '$configuration'" },
-        { """{ "$configuration": { "name": "A", "name": "B" } }""", "\"name\": \"B\"", "stated twice" },
-        { """{ "$configuration": { "name": "A" }, "$configuration": { "name": "B" } }""", "\"$configuration\": { \"name\": \"B\"", "stated twice" },
+        { """{ "$configuration": "Obra" }""", "\"Obra\"", "must be an object", "Obra" },
+        { """{ "$configuration": { "sharedParameter": null } }""", "\"$configuration\"", "has no \"name\"", null },
+        { """{ "$configuration": { "name": "  " } }""", "\"  \"", "must be a text naming", "  " },
+        { """{ "$configuration": { "name": 3 } }""", "3 }", "must be a text naming", "3" },
+        { """{ "$configuration": { "name": "A", "sharedParameter": "shared" } }""", "\"shared\"", "the shared parameter's GUID", "shared" },
+        { """{ "$configuration": { "name": "A", "sharedParameter": 7 } }""", "7 }", "the shared parameter's GUID", "7" },
+        { """{ "$configuration": { "name": "A", "owner": "B" } }""", "\"owner\"", "is not a field of '$configuration'", "owner" },
+        { """{ "$configuration": { "name": "A", "name": "B" } }""", "\"name\": \"B\"", "stated twice", "name" },
+        { """{ "$configuration": { "name": "A" }, "$configuration": { "name": "B" } }""", "\"$configuration\": { \"name\": \"B\"", "stated twice", null },
     };
 
     [Theory]
     [MemberData(nameof(Refused))]
-    public void AHeaderThatCannotBeHonouredIsRefusedWhereItIsWritten(string text, string at, string phrase)
+    public void AHeaderThatCannotBeHonouredIsRefusedWhereItIsWritten(string text, string at, string phrase, string? written)
     {
         Result<CriteriaFileContent, ConfigError> read = CriteriaFile.Read(text);
 
         Assert.False(read.IsOk);
         Assert.Contains(phrase, read.Error.Message, StringComparison.Ordinal);
         Assert.Equal(new ConfigLocation(1, text.IndexOf(at, StringComparison.Ordinal) + 1), read.Error.Location);
+        Assert.Equal(written, read.Error.InvalidValue);
     }
 
     /// <summary>Beside the model, a header would be read and then ignored: it is refused, at its key, until a configuration can be picked.</summary>

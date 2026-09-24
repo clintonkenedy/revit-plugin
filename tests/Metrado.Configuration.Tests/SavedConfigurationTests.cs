@@ -24,6 +24,39 @@ public sealed class SavedConfigurationTests
         Assert.Equal(Describe(saved.Criteria), Describe(read.Criteria));
     }
 
+    /// <summary>
+    /// Sources keep their order, which decides the budget, and a threshold its
+    /// full precision: 0.1 and a third are not exact in binary, and a writer
+    /// that narrowed or rounded them would change which openings are added back.
+    /// </summary>
+    [Fact]
+    public void SourceOrderAndFullPrecisionSurviveTheRoundTrip()
+    {
+        CriteriaSet criteria = CriteriaSet.Merge(
+            CriteriaSet.Default,
+            [
+                new CategoryOverride("Walls", sources: ["HOST_AREA_COMPUTED", "AREA_OF_FACE"], threshold: 0.1),
+                new CategoryOverride("Floors", sources: ["SLAB_AREA", "HOST_AREA_COMPUTED"], threshold: 1.0 / 3),
+            ]).Value;
+
+        SavedConfiguration read = Read(SavedConfigurations.Write(new SavedConfiguration("A", criteria, SharedParameter: null)));
+
+        Assert.Equal(["HOST_AREA_COMPUTED", "AREA_OF_FACE"], read.Criteria.ByCategory["Walls"].Sources);
+        Assert.Equal(["SLAB_AREA", "HOST_AREA_COMPUTED"], read.Criteria.ByCategory["Floors"].Sources);
+        Assert.Equal(0.1, read.Criteria.ByCategory["Walls"].Threshold.Value);
+        Assert.Equal(1.0 / 3, read.Criteria.ByCategory["Floors"].Threshold.Value);
+    }
+
+    /// <summary>A configuration is named: a blank name would be written and then refused on reading, so it is refused at once.</summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("　")]
+    public void AConfigurationWithoutANameIsRefused(string name)
+    {
+        Assert.Throws<ArgumentException>(() => new SavedConfiguration(name, CriteriaSet.Default, SharedParameter: null));
+    }
+
     [Fact]
     public void NoSharedParameterIsWrittenAsNullAndReadBackAsNone()
     {
