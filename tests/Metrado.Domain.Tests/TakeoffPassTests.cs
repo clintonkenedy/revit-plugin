@@ -83,6 +83,33 @@ public sealed class TakeoffPassTests
         Assert.EndsWith("so check its geometry; the line is written as measured.", warning.Condition, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The rule reads the metrado, not the raw or gross quantity: a wall of no
+    /// raw area whose opening is added back measures that opening and raises
+    /// nothing; one whose opening stays deducted measures nothing, though its
+    /// gross does not.
+    /// </summary>
+    [Theory]
+    [InlineData(0.5, 0)]
+    [InlineData(1.5, 1)]
+    public void TheRuleReadsTheMetradoNotTheRawOrGross(double opening, int warnings)
+    {
+        TakeoffPass.Outcome outcome = TakeoffPass.Run(CriteriaSet.Default, [Element("w-0", "Walls", "B2010", Area(0.0), openings: [("hatch", opening)])], Chain);
+
+        Assert.Equal(warnings, outcome.Warnings.Count(warning => warning.Condition.StartsWith("Its metrado is", StringComparison.Ordinal)));
+    }
+
+    /// <summary>A value that is no number is flagged too, and a fraction is stated as it is.</summary>
+    [Theory]
+    [InlineData(double.NaN, "Its metrado is NaN m2")]
+    [InlineData(-0.5, "Its metrado is -0.5 m2")]
+    public void ANaNOrAFractionIsStatedAsItIs(double area, string phrase)
+    {
+        TakeoffPass.Outcome outcome = TakeoffPass.Run(CriteriaSet.Default, [Element("w-0", "Walls", "B2010", Area(area))], Chain);
+
+        Assert.Single(outcome.Warnings, warning => warning.Condition.StartsWith(phrase, StringComparison.Ordinal));
+    }
+
     /// <summary>A layer line with no area is named by its material, and the wall's other lines raise nothing.</summary>
     [Fact]
     public void AZeroLayerLineIsWarnedAboutByItsMaterial()
