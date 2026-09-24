@@ -60,7 +60,7 @@ public static class CompletionReport
 
         string details = string.Join(
             Environment.NewLine,
-            report.Warnings.Select(warning => $"- {warning.CategoryName} {warning.UniqueId} ({warning.TypeName}): {warning.Condition}"));
+            report.Warnings.Select(warning => $"- {warning.CategoryName} {warning.UniqueId} ({warning.FamilyName}: {warning.TypeName}): {warning.Condition}"));
 
         return new Text(
             summary.ToString(),

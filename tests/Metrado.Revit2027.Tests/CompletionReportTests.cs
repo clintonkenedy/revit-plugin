@@ -251,8 +251,8 @@ public sealed class CompletionReportTests
 
         Assert.NotNull(text.WarningsList);
         Assert.StartsWith(text.Summary, text.WarningsList);
-        Assert.Contains("- Walls element-1 (Generic): first condition", text.WarningsList);
-        Assert.Contains("- Walls element-2 (Generic): second condition", text.WarningsList);
+        Assert.Contains("- Walls element-1 (Basic Wall: Generic): first condition", text.WarningsList);
+        Assert.Contains("- Walls element-2 (Basic Wall: Generic): second condition", text.WarningsList);
     }
 
     private static EffectiveCriteria Defaults() => new(CriteriaSet.Default, ConfigSource.BuiltInDefaults, path: null);

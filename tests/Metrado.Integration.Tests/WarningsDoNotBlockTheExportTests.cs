@@ -24,6 +24,7 @@ public sealed class WarningsDoNotBlockTheExportTests
         using ExportRun run = ExportPipeline.RunWithBuiltInDefaults(model);
 
         Assert.Equal(17, run.Budget.StatedExportedLineCount());
+        Assert.Equal(model.Select(wall => wall.UniqueId).Order(StringComparer.Ordinal), run.Budget.ExportedIdentifiers().Order(StringComparer.Ordinal));
         Assert.Equal(18.0, run.Budget.MetradoOf("clean-1"), 9);
         Assert.Equal(15, run.Report.WarningCount);
     }

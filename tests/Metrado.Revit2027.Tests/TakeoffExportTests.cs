@@ -182,6 +182,23 @@ public sealed class TakeoffExportTests
         Assert.DoesNotContain(outcome.Report.Warnings, warning => warning.Condition.Contains("near-one"));
     }
 
+    /// <summary>
+    /// Task 3.4 on the path the command takes: fifteen suspect walls and two
+    /// clean ones give seventeen lines and fifteen warnings, each naming its
+    /// wall. The command then writes whatever this returns; on Revit 2027.2 it
+    /// wrote Snowdon's workbook with 251 warnings, and with 366.
+    /// </summary>
+    [Fact]
+    public void FifteenWarningsLeaveEveryLineInTheResult()
+    {
+        List<ElementTakeoff> walls = [.. Enumerable.Range(1, 15).Select(index => Wall($"suspect-{index:00}", "B2010", area: 0.0)), Wall("clean-1", "B2010", area: 18.0), Wall("clean-2", "B2010", area: 12.0)];
+
+        TakeoffExport.Outcome outcome = TakeoffExport.Run(Defaults(), walls, []);
+
+        Assert.Equal(17, outcome.Result.LineCount);
+        Assert.Equal(walls.Take(15).Select(wall => wall.UniqueId), outcome.Report.Warnings.Select(warning => warning.UniqueId));
+    }
+
     private static EffectiveCriteria Defaults() => CriteriaResolver.Resolve(CriteriaFileLookup.Absent, path: null).Value;
 
     private static EffectiveCriteria Supplied(double threshold)
