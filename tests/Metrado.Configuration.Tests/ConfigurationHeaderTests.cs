@@ -6,9 +6,9 @@ namespace Metrado.Configuration.Tests;
 /// Pins the header by which a saved configuration names itself and sets its
 /// codification (task 3.6): a reserved <c>"$configuration"</c> entry, which no
 /// category can be named, with a name and the nominated shared parameter's
-/// GUID. Nothing in it is ignored, each refusal names its place, and a
-/// criteria file beside the model refuses it until a configuration can be
-/// picked (3.7).
+/// GUID. Nothing in it is ignored and each refusal names its place. A
+/// configuration picked in Revit is copied beside the model (3.7), so the
+/// criteria file there carries the header into the criteria in force.
 /// </summary>
 public sealed class ConfigurationHeaderTests
 {
@@ -64,17 +64,24 @@ public sealed class ConfigurationHeaderTests
         Assert.Equal(written, read.Error.InvalidValue);
     }
 
-    /// <summary>Beside the model, a header would be read and then ignored: it is refused, at its key, until a configuration can be picked.</summary>
+    /// <summary>Beside the model the header is in force: the run knows the configuration's name and reads its shared parameter.</summary>
     [Fact]
-    public void ACriteriaFileBesideTheModelRefusesAHeader()
+    public void ACriteriaFileBesideTheModelCarriesItsConfiguration()
     {
-        const string text = """{ "Walls": { "threshold": 0.5 }, "$configuration": { "name": "A" } }""";
+        EffectiveCriteria criteria = CriteriaResolver.Resolve(
+            CriteriaFileLookup.Found($$"""{ "$configuration": { "name": "Obra Los Olivos", "sharedParameter": "{{Guid}}" }, "Walls": { "threshold": 0.5 } }"""),
+            "C:/model/metrado.criteria.json").Value;
 
-        Result<IReadOnlyList<LocatedOverride>, ConfigError> parsed = CriteriaFile.Parse(text);
+        Assert.Equal(("Obra Los Olivos", System.Guid.Parse(Guid)), (criteria.ConfigurationName, criteria.SharedParameter));
+        Assert.Equal(0.5, criteria.Criteria.ByCategory["Walls"].Threshold.Value);
+    }
 
-        Assert.False(parsed.IsOk);
-        Assert.Contains("names a saved configuration", parsed.Error.Message, StringComparison.Ordinal);
-        Assert.Equal(new ConfigLocation(1, text.IndexOf("\"$configuration\"", StringComparison.Ordinal) + 1), parsed.Error.Location);
+    [Fact]
+    public void ACriteriaFileWithoutAHeaderNamesNoConfiguration()
+    {
+        EffectiveCriteria criteria = CriteriaResolver.Resolve(CriteriaFileLookup.Found("""{ "Walls": { "threshold": 0.5 } }"""), "C:/model/metrado.criteria.json").Value;
+
+        Assert.Equal(((string?)null, (Guid?)null), (criteria.ConfigurationName, criteria.SharedParameter));
     }
 
     private static CriteriaFileContent Read(string text)

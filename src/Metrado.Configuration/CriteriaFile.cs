@@ -67,25 +67,14 @@ public static class CriteriaFile
         AllowTrailingCommas = true,
     };
 
-    /// <summary>The entries of a criteria file beside the model, in the order written, or why the file cannot be honoured.</summary>
-    /// <remarks>
-    /// Lines and positions count from 1, and positions count characters, as an
-    /// editor shows them. A saved configuration's header is refused: beside the
-    /// model its name and shared parameter would be read and then ignored.
-    /// </remarks>
+    /// <summary>The entries of a criteria file, in the order written, or why the file cannot be honoured.</summary>
+    /// <remarks>Lines and positions count from 1, and positions count characters, as an editor shows them.</remarks>
     public static Result<IReadOnlyList<LocatedOverride>, ConfigError> Parse(string text)
     {
-        Result<(CriteriaFileContent Content, ConfigLocation? HeaderAt), ConfigError> read = ReadText(text);
-        if (!read.IsOk)
-        {
-            return Result<IReadOnlyList<LocatedOverride>, ConfigError>.Err(read.Error);
-        }
-
-        return read.Value.HeaderAt is ConfigLocation at
-            ? Refuse<IReadOnlyList<LocatedOverride>>(
-                at,
-                $"The file names a saved configuration ('{ConfigurationKey}'), which Metrado does not load from beside the model yet: leave that entry out.")
-            : Result<IReadOnlyList<LocatedOverride>, ConfigError>.Ok(read.Value.Content.Entries);
+        Result<CriteriaFileContent, ConfigError> read = Read(text);
+        return read.IsOk
+            ? Result<IReadOnlyList<LocatedOverride>, ConfigError>.Ok(read.Value.Entries)
+            : Result<IReadOnlyList<LocatedOverride>, ConfigError>.Err(read.Error);
     }
 
     /// <summary>A criteria file or a saved configuration: its header, if any, and its entries, or why it cannot be honoured.</summary>

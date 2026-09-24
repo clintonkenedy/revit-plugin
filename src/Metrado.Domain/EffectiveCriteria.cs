@@ -44,6 +44,32 @@ public sealed record EffectiveCriteria
     /// <summary>The file they were read from, when one was.</summary>
     public string? Path { get; }
 
+    /// <summary>The saved configuration the file names itself as, when it does (task 3.7).</summary>
+    /// <exception cref="ArgumentException">Set on criteria that came from no file.</exception>
+    public string? ConfigurationName
+    {
+        get => _configurationName;
+        init => _configurationName = FromFileOnly(value, nameof(ConfigurationName));
+    }
+
+    /// <summary>The shared parameter the configuration nominates for the chain's third link, when it does.</summary>
+    /// <exception cref="ArgumentException">Set on criteria that came from no file.</exception>
+    public Guid? SharedParameter
+    {
+        get => _sharedParameter;
+        init => _sharedParameter = FromFileOnly(value, nameof(SharedParameter));
+    }
+
+    private readonly string? _configurationName;
+
+    private readonly Guid? _sharedParameter;
+
+    /// <summary>A configuration is a file: the product's own criteria name none, and nominate nothing.</summary>
+    private T FromFileOnly<T>(T value, string name) =>
+        value is null || Source == ConfigSource.File
+            ? value
+            : throw new ArgumentException($"The built-in criteria are no saved configuration, so they have no {name}.", name);
+
     /// <summary>
     /// Refuses a provenance that cannot be named.
     /// </summary>

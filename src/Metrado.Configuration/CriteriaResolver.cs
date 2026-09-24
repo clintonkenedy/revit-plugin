@@ -102,23 +102,30 @@ public static class CriteriaResolver
                 "A criteria file was read, but not where from, so it cannot be named as the source of the criteria. The run stopped."));
         }
 
-        Result<IReadOnlyList<LocatedOverride>, ConfigError> parsed = CriteriaFile.Parse(text);
+        Result<CriteriaFileContent, ConfigError> parsed = CriteriaFile.Read(text);
         if (!parsed.IsOk)
         {
             return Result<EffectiveCriteria, ConfigError>.Err(InFile(parsed.Error, parsed.Error.Location, path));
         }
 
+        IReadOnlyList<LocatedOverride> entries = parsed.Value.Entries;
         Result<CriteriaSet, ConfigError> merged = CriteriaSet.Merge(
             CriteriaSet.Default,
-            [.. parsed.Value.Select(entry => entry.Override)]);
+            [.. entries.Select(entry => entry.Override)]);
         if (!merged.IsOk)
         {
             ConfigLocation? where = merged.Error.Location
-                ?? parsed.Value.LastOrDefault(entry => entry.Override.Category == merged.Error.Category)?.Location;
+                ?? entries.LastOrDefault(entry => entry.Override.Category == merged.Error.Category)?.Location;
             return Result<EffectiveCriteria, ConfigError>.Err(InFile(merged.Error, where, path));
         }
 
-        return Result<EffectiveCriteria, ConfigError>.Ok(new EffectiveCriteria(merged.Value, ConfigSource.File, path));
+        // A configuration picked in Revit is copied here (task 3.7): its name
+        // and shared parameter are in force with its criteria.
+        return Result<EffectiveCriteria, ConfigError>.Ok(new EffectiveCriteria(merged.Value, ConfigSource.File, path)
+        {
+            ConfigurationName = parsed.Value.Configuration?.Name,
+            SharedParameter = parsed.Value.Configuration?.SharedParameter,
+        });
     }
 
     /// <summary>The refusal as the estimator reads it: the file, the place in it, the category and the value.</summary>
