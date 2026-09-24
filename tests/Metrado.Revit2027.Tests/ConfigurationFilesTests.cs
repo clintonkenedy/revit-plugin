@@ -90,6 +90,78 @@ public sealed class ConfigurationFilesTests : IDisposable
         Assert.False(File.Exists(target + ".partial"));
     }
 
+    /// <summary>Picked from a library folder, the configuration lands beside the model, never beside itself.</summary>
+    [Fact]
+    public void AConfigurationIsCopiedBesideTheModelNotBesideItsOwnFile()
+    {
+        string library = Directory.CreateDirectory(Path.Combine(_folder, "library")).FullName;
+        string project = Directory.CreateDirectory(Path.Combine(_folder, "project")).FullName;
+        string saved = Path.Combine(library, "Obra.json");
+        File.Move(Saved("Obra", threshold: 0.5), saved);
+
+        Assert.Equal(LoadStatus.Loaded, ConfigurationFiles.Load(saved, Path.Combine(project, "Office.rvt"), replace: false).Status);
+
+        Assert.True(File.Exists(Path.Combine(project, CriteriaFileLocator.FileName)));
+        Assert.False(File.Exists(Path.Combine(library, CriteriaFileLocator.FileName)));
+    }
+
+    /// <summary>A configuration the export would refuse is refused on loading, and the model's criteria file is left as it was.</summary>
+    [Fact]
+    public void AConfigurationTheExportWouldRefuseIsNotLoaded()
+    {
+        File.WriteAllText(CriteriaFile, """{ "Walls": { "threshold": 2.0 } }""");
+        string typo = Path.Combine(_folder, "typo.json");
+        File.WriteAllText(typo, """{ "$configuration": { "name": "Typo" }, "Walls": { "sources": ["HOST_AREA_COMPUTD"] } }""");
+
+        LoadOutcome outcome = ConfigurationFiles.Load(typo, Model, replace: true);
+
+        Assert.Equal(LoadStatus.Refused, outcome.Status);
+        Assert.Contains("which Metrado does not read for Walls", outcome.Message, StringComparison.Ordinal);
+        Assert.Equal("""{ "Walls": { "threshold": 2.0 } }""", File.ReadAllText(CriteriaFile));
+    }
+
+    /// <summary>A write that fails leaves no temporary file behind, and the file it would have replaced as it was.</summary>
+    [Fact]
+    public void AFailedWriteLeavesNoTemporaryFileAndTheOldOne()
+    {
+        string target = Path.Combine(_folder, "Locked.json");
+        File.WriteAllText(target, "kept");
+        File.SetAttributes(target, FileAttributes.ReadOnly);
+        try
+        {
+            Assert.ThrowsAny<UnauthorizedAccessException>(() => ConfigurationFiles.Save(new EffectiveCriteria(CriteriaSet.Default, ConfigSource.BuiltInDefaults, path: null), target));
+
+            Assert.Equal("kept", File.ReadAllText(target));
+            Assert.Empty(Directory.GetFiles(_folder, "*.partial"));
+        }
+        finally
+        {
+            File.SetAttributes(target, FileAttributes.Normal);
+        }
+    }
+
+    /// <summary>A file named ".json" would give a configuration no name, which could never be loaded: it is refused, and nothing is written.</summary>
+    [Fact]
+    public void AFileWithoutANameIsRefusedAndNothingIsWritten()
+    {
+        string target = Path.Combine(_folder, ".json");
+
+        Assert.Throws<ArgumentException>(() => ConfigurationFiles.Save(new EffectiveCriteria(CriteriaSet.Default, ConfigSource.BuiltInDefaults, path: null), target));
+        Assert.False(File.Exists(target));
+    }
+
+    /// <summary>The name proposed in Save As keeps its dots, drops what a file name cannot hold, and falls back on the model's.</summary>
+    [Theory]
+    [InlineData("Obra v2.1", "Obra v2.1.json")]
+    [InlineData("Obra	Los Olivos", "Obra Los Olivos.json")]
+    [InlineData("Obra: fase 1/2", "Obra fase 12.json")]
+    [InlineData("	", "Office criteria.json")]
+    [InlineData(null, "Office criteria.json")]
+    public void TheProposedFileNameIsOneWindowsAccepts(string? configuration, string proposed)
+    {
+        Assert.Equal(proposed, ConfigurationFiles.ProposedFileName(configuration, Model));
+    }
+
     private string Saved(string name, double threshold)
     {
         string path = Path.Combine(_folder, $"{name}.json");

@@ -81,7 +81,7 @@ public sealed class SaveConfigurationCommand : IExternalCommand
         using FileSaveDialog dialog = new(ConfigurationCommand.Filter)
         {
             Title = "Save the criteria in force as a Metrado configuration",
-            InitialFileName = criteria.Value.ConfigurationName ?? $"{Path.GetFileNameWithoutExtension(model)} criteria",
+            InitialFileName = ConfigurationFiles.ProposedFileName(criteria.Value.ConfigurationName, model),
         };
         if (dialog.Show() != ItemSelectionDialogResult.Confirmed)
         {
@@ -98,6 +98,11 @@ public sealed class SaveConfigurationCommand : IExternalCommand
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             TaskDialog.Show(ConfigurationCommand.Title, $"The configuration could not be saved to '{target}': {ex.Message}");
+            return Result.Cancelled;
+        }
+        catch (ArgumentException)
+        {
+            TaskDialog.Show(ConfigurationCommand.Title, $"No configuration was saved: a configuration is named after its file, and '{Path.GetFileName(target)}' gives it no name.");
             return Result.Cancelled;
         }
     }

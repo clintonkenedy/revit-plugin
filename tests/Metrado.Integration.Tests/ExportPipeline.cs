@@ -54,7 +54,7 @@ internal static class ExportPipeline
     /// </param>
     internal static ExportRun Run(EffectiveCriteria criteria, IReadOnlyList<ElementTakeoff> model)
     {
-        TakeoffPass.Outcome pass = TakeoffPass.Run(criteria.Criteria, model, CodificationChain.Standard(sharedParameter: null));
+        TakeoffPass.Outcome pass = TakeoffPass.Run(criteria.Criteria, model, CodificationChain.Standard(criteria.SharedParameter?.ToString("D")));
         RequireEveryElementMeasured(model, pass);
 
         TakeoffResult result = TakeoffResult.Group(pass.Lines);

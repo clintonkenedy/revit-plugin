@@ -60,6 +60,13 @@ public static class ConfigurationFiles
             return new LoadOutcome(LoadStatus.Refused, $"'{configurationPath}' is not a saved configuration Metrado can load{place}: {read.Error.Message}");
         }
 
+        // Refused as the export would refuse it, so a working criteria file is
+        // never replaced by one every export of the model then stops on.
+        if (ReadableSources.Check(read.Value.Criteria) is ConfigError unreadable)
+        {
+            return new LoadOutcome(LoadStatus.Refused, $"'{configurationPath}' is a configuration every export would refuse: {unreadable.Message}");
+        }
+
         string criteriaPath = Path.Combine(Path.GetDirectoryName(modelPath)!, CriteriaFileLocator.FileName);
         string name = read.Value.Name;
         if (File.Exists(criteriaPath) && !replace)
@@ -86,11 +93,36 @@ public static class ConfigurationFiles
         return name;
     }
 
-    /// <summary>Writes beside the target first and renames over it, so a failure never leaves half a file.</summary>
+    /// <summary>
+    /// The file name Save As proposes: the configuration in force's name, or
+    /// the model's, with the extension written out so a name with dots keeps
+    /// them, and without the characters a file name cannot hold.
+    /// </summary>
+    public static string ProposedFileName(string? configurationName, string modelPath)
+    {
+        ArgumentNullException.ThrowIfNull(modelPath);
+
+        char[] invalid = Path.GetInvalidFileNameChars();
+        string name = string.Concat((configurationName ?? string.Empty)
+            .Select(c => char.IsControl(c) ? " " : invalid.Contains(c) ? string.Empty : c.ToString())).Trim();
+        return (name.Length > 0 ? name : $"{Path.GetFileNameWithoutExtension(modelPath)} criteria") + ".json";
+    }
+
+    /// <summary>
+    /// Writes a short-named file beside the target and renames it over, so a
+    /// failure never leaves half a file, and removes it when either step fails.
+    /// </summary>
     private static void Replace(string path, string text)
     {
-        string partial = path + ".partial";
-        File.WriteAllText(partial, text);
-        File.Move(partial, path, overwrite: true);
+        string partial = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, $".metrado-{Guid.NewGuid():N}.partial");
+        try
+        {
+            File.WriteAllText(partial, text);
+            File.Move(partial, path, overwrite: true);
+        }
+        finally
+        {
+            File.Delete(partial);
+        }
     }
 }
