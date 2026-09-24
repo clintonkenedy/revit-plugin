@@ -41,12 +41,19 @@ public static class CompletionReport
                 $"{coded} measurement {(coded == 1 ? "line" : "lines")} exported to the budget sheet; {Unclassified(report)} listed as unclassified."));
         summary.AppendLine();
 
-        summary.AppendLine(criteria.Source == ConfigSource.File
-            ? $"Criteria in force, from {criteria.Path} over the built-in criteria:"
-            : $"No criteria file was found beside the model ({CriteriaFileLocator.FileName}), so the built-in criteria are in force:");
+        summary.AppendLine(criteria.Source != ConfigSource.File
+            ? $"No criteria file was found beside the model ({CriteriaFileLocator.FileName}), so the built-in criteria are in force:"
+            : criteria.ConfigurationName is string name
+                ? $"Criteria in force, from the configuration '{name}' ({criteria.Path}) over the built-in criteria:"
+                : $"Criteria in force, from {criteria.Path} over the built-in criteria:");
         foreach (CategoryCriterion criterion in criteria.Criteria.ByCategory.Values.OrderBy(c => c.Category, StringComparer.Ordinal))
         {
             summary.AppendLine(Describe(criterion));
+        }
+
+        if (criteria.SharedParameter is Guid shared)
+        {
+            summary.AppendLine(CultureInfo.InvariantCulture, $"Codes are read from the Assembly Code, then the Keynote, then the shared parameter {shared:D}.");
         }
 
         summary.AppendLine();

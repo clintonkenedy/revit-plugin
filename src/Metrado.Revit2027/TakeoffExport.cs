@@ -24,8 +24,9 @@ public static class TakeoffExport
         ArgumentNullException.ThrowIfNull(elements);
         ArgumentNullException.ThrowIfNull(extractionWarnings);
 
-        // No shared parameter can be nominated yet; the chain reads Assembly Code, then Keynote.
-        TakeoffPass.Outcome pass = TakeoffPass.Run(criteria.Criteria, elements, CodificationChain.Standard(sharedParameter: null));
+        // The chain reads the Assembly Code, then the Keynote, then the shared
+        // parameter a configuration nominates, keyed as extraction keys it.
+        TakeoffPass.Outcome pass = TakeoffPass.Run(criteria.Criteria, elements, CodificationChain.Standard(criteria.SharedParameter?.ToString("D")));
         TakeoffResult grouped = TakeoffResult.Group(pass.Lines);
         return new Outcome(grouped, RunReport.For(grouped, [.. extractionWarnings, .. pass.Warnings]));
     }

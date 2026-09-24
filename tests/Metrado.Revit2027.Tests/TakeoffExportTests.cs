@@ -199,6 +199,21 @@ public sealed class TakeoffExportTests
         Assert.Equal(walls.Take(15).Select(wall => wall.UniqueId), outcome.Report.Warnings.Select(warning => warning.UniqueId));
     }
 
+    /// <summary>The configuration's shared parameter is the chain's third link: a wall with no Assembly Code or Keynote is coded by it.</summary>
+    [Fact]
+    public void TheConfigurationsSharedParameterCodesAWall()
+    {
+        Guid shared = Guid.Parse("4f46423f-5c26-11d4-9217-0000863f27ad");
+        ElementTakeoff wall = Wall("w1", "", area: 18.0) with
+        {
+            Codes = new CodificationReadings(assemblyCode: "", keynote: null, sharedParameters: new Dictionary<string, string?> { [shared.ToString("D")] = "02.01.01" }),
+        };
+        EffectiveCriteria nominating = new(CriteriaSet.Default, ConfigSource.File, @"C:\Projects\Office\metrado.criteria.json") { SharedParameter = shared };
+
+        Assert.Equal("02.01.01", Assert.Single(TakeoffExport.Run(nominating, [wall], []).Result.Partidas).Key.PartidaCode);
+        Assert.True(Assert.Single(TakeoffExport.Run(Defaults(), [wall], []).Result.Partidas).IsUnclassified);
+    }
+
     private static EffectiveCriteria Defaults() => CriteriaResolver.Resolve(CriteriaFileLookup.Absent, path: null).Value;
 
     private static EffectiveCriteria Supplied(double threshold)

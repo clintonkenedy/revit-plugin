@@ -63,7 +63,7 @@ public sealed class ExportTakeoffCommand : IExternalCommand
 
             // Layers are read only for the categories the criteria take off by layer.
             Stopwatch clock = Stopwatch.StartNew();
-            ExtractionService.Extraction extraction = ExtractionService.Extract(document, sharedParameter: null, ReadableSources.Layered(criteria.Value.Criteria));
+            ExtractionService.Extraction extraction = ExtractionService.Extract(document, criteria.Value.SharedParameter, ReadableSources.Layered(criteria.Value.Criteria));
             TakeoffExport.Outcome outcome = TakeoffExport.Run(criteria.Value, extraction.Elements, extraction.Warnings);
             TakeoffWorkbook.Write(outcome.Result, files.Workbook);
 

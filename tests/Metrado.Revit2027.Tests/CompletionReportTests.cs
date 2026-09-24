@@ -105,6 +105,33 @@ public sealed class CompletionReportTests
         Assert.Contains(wording, summary);
     }
 
+    /// <summary>A configuration picked in Revit is named, with the shared parameter it nominates (task 3.7).</summary>
+    [Fact]
+    public void AConfigurationIsNamedWithItsSharedParameter()
+    {
+        EffectiveCriteria criteria = new(CriteriaSet.Default, ConfigSource.File, @"C:\Projects\Office\metrado.criteria.json")
+        {
+            ConfigurationName = "Obra Los Olivos",
+            SharedParameter = Guid.Parse("4f46423f-5c26-11d4-9217-0000863f27ad"),
+        };
+
+        string summary = CompletionReport.For(Report(lines: 1, unclassified: 0), criteria, Workbook).Summary;
+
+        Assert.Contains(@"Criteria in force, from the configuration 'Obra Los Olivos' (C:\Projects\Office\metrado.criteria.json) over the built-in criteria:", summary);
+        Assert.Contains("Codes are read from the Assembly Code, then the Keynote, then the shared parameter 4f46423f-5c26-11d4-9217-0000863f27ad.", summary);
+    }
+
+    /// <summary>A criteria file that names no configuration is named by its path alone, and nominates no shared parameter.</summary>
+    [Fact]
+    public void AFileWithoutAConfigurationIsNamedByItsPath()
+    {
+        string summary = CompletionReport.For(
+            Report(lines: 1, unclassified: 0), new EffectiveCriteria(CriteriaSet.Default, ConfigSource.File, @"C:\Projects\Office\metrado.criteria.json"), Workbook).Summary;
+
+        Assert.Contains(@"Criteria in force, from C:\Projects\Office\metrado.criteria.json over the built-in criteria:", summary);
+        Assert.DoesNotContain("shared parameter", summary);
+    }
+
     /// <summary>A threshold other than the default, with its sources: nothing in the line is fixed text.</summary>
     [Fact]
     public void ACriterionLineCarriesItsOwnThresholdAndSources()
