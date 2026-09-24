@@ -46,11 +46,12 @@ public sealed class ReadOnlyTripwireTests
     /// <summary>
     /// Setters that configure something other than the model: how geometry is
     /// read (<c>Options</c>), how the ribbon button is described at startup
-    /// (<c>ItemData</c> and <c>PushButtonData</c>), and what a dialog says
-    /// (<c>TaskDialog</c>).
+    /// (<c>ItemData</c> and <c>PushButtonData</c>), what a dialog says
+    /// (<c>TaskDialog</c>), and what a file dialog offers (<c>FileDialog</c>,
+    /// <c>FileSaveDialog</c>).
     /// </summary>
     private static readonly string[] HarmlessSetterTypes =
-        ["Autodesk.Revit.DB.Options", "Autodesk.Revit.UI.ItemData", "Autodesk.Revit.UI.PushButtonData", "Autodesk.Revit.UI.TaskDialog"];
+        ["Autodesk.Revit.DB.Options", "Autodesk.Revit.UI.ItemData", "Autodesk.Revit.UI.PushButtonData", "Autodesk.Revit.UI.TaskDialog", "Autodesk.Revit.UI.FileDialog", "Autodesk.Revit.UI.FileSaveDialog"];
 
     /// <summary>Every Revit API member the add-in uses, each reviewed as reading, configuring a read, or UI.</summary>
     private static readonly string[] ReviewedReadOnly =
@@ -129,6 +130,7 @@ public sealed class ReadOnlyTripwireTests
         "Autodesk.Revit.DB.LabelUtils.GetLabelFor",
         "Autodesk.Revit.DB.Line.get_Direction",
         "Autodesk.Revit.DB.LocationCurve.get_Curve",
+        "Autodesk.Revit.DB.ModelPathUtils.ConvertModelPathToUserVisiblePath",
         "Autodesk.Revit.DB.Opening.get_BoundaryRect",
         "Autodesk.Revit.DB.Opening.get_Host",
         "Autodesk.Revit.DB.Opening.get_IsRectBoundary",
@@ -162,6 +164,12 @@ public sealed class ReadOnlyTripwireTests
         "Autodesk.Revit.DB.XYZ.get_Z",
         "Autodesk.Revit.DB.XYZ.op_Subtraction",
         "Autodesk.Revit.UI.ExternalCommandData.get_Application",
+        "Autodesk.Revit.UI.FileDialog.GetSelectedModelPath",
+        "Autodesk.Revit.UI.FileDialog.Show",
+        "Autodesk.Revit.UI.FileDialog.set_Title",
+        "Autodesk.Revit.UI.FileOpenDialog..ctor",
+        "Autodesk.Revit.UI.FileSaveDialog..ctor",
+        "Autodesk.Revit.UI.FileSaveDialog.set_InitialFileName",
         "Autodesk.Revit.UI.ItemData.set_ToolTip",
         "Autodesk.Revit.UI.PushButtonData..ctor",
         "Autodesk.Revit.UI.PushButtonData.set_AvailabilityClassName",

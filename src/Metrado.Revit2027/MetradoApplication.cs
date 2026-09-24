@@ -5,7 +5,7 @@ namespace Metrado.Revit2027;
 /// <summary>
 /// The class <c>Metrado.addin</c> names. Revit constructs it at startup and
 /// this is the add-in's only entry point: it checks the deployment is complete,
-/// adds the export button (and, in a development session, the smoke run's)
+/// adds the export and configuration buttons (and, in a development session, the smoke run's)
 /// and does nothing else, so a failure here is a deployment or registration
 /// failure and nothing more.
 /// </summary>
@@ -34,6 +34,26 @@ public sealed class MetradoApplication : IExternalApplication
             typeof(ExportTakeoffCommand).FullName)
         {
             ToolTip = "Export the model's partidas and metrado to an Excel workbook beside the model.",
+            AvailabilityClassName = typeof(CommandAvailability).FullName,
+        });
+
+        panel.AddItem(new PushButtonData(
+            nameof(LoadConfigurationCommand),
+            "Load\nconfiguration",
+            typeof(LoadConfigurationCommand).Assembly.Location,
+            typeof(LoadConfigurationCommand).FullName)
+        {
+            ToolTip = "Copy a saved Metrado configuration beside the model as its criteria file, so every export of the model uses it.",
+            AvailabilityClassName = typeof(CommandAvailability).FullName,
+        });
+
+        panel.AddItem(new PushButtonData(
+            nameof(SaveConfigurationCommand),
+            "Save\nconfiguration",
+            typeof(SaveConfigurationCommand).Assembly.Location,
+            typeof(SaveConfigurationCommand).FullName)
+        {
+            ToolTip = "Save the criteria in force for this model as a named Metrado configuration, to load beside other models.",
             AvailabilityClassName = typeof(CommandAvailability).FullName,
         });
 
